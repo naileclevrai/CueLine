@@ -1,34 +1,11 @@
-//! Left column of the arrange view: LTC and track headers.
+//! Left column of the arrange view: section header, LTC header and track
+//! headers in the style of Logic Pro.
 
-use eframe::egui::{self, pos2, vec2, Color32, CornerRadius, Rect, RichText, Sense, Stroke, StrokeKind, Ui, UiBuilder};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, CornerRadius, Rect, RichText, Sense, Stroke, Ui, UiBuilder};
 
-use super::theme;
-use super::widgets::paint_hmeter;
-use super::METER_TRACK;
+use super::widgets::{chip, fader, knob, paint_vmeter, switch, tabular, tool_button, Icon};
+use super::{fonts, theme, METER_TRACK};
 use crate::app::{CueLineApp, TrackState};
-
-/// A compact square toggle (mute / solo / on).
-pub fn toggle_chip(ui: &mut Ui, text: &str, on: bool, color: Color32, tip: &str) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(22.0, 18.0), Sense::click());
-    let p = ui.painter();
-    let fill = if on {
-        color
-    } else if resp.hovered() {
-        theme::BG_WIDGET_HOVER
-    } else {
-        theme::BG_WIDGET
-    };
-    p.rect_filled(rect, CornerRadius::same(2), fill);
-    p.rect_stroke(
-        rect,
-        CornerRadius::same(2),
-        Stroke::new(1.0, if on { color } else { theme::BORDER }),
-        StrokeKind::Inside,
-    );
-    let fg = if on { Color32::from_rgb(0x14, 0x14, 0x16) } else { theme::TEXT_DIM };
-    p.text(rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(11.0), fg);
-    resp.on_hover_text(tip)
-}
 
 pub fn channel_label(ch: i32) -> String {
     if ch < 0 {
@@ -40,7 +17,7 @@ pub fn channel_label(ch: i32) -> String {
 
 pub fn channel_combo(ui: &mut Ui, id: &str, value: &mut i32, channels: u16, allow_none: bool) -> bool {
     let mut changed = false;
-    egui::ComboBox::from_id_salt(id).width(64.0).selected_text(channel_label(*value)).show_ui(ui, |ui| {
+    egui::ComboBox::from_id_salt(id).width(70.0).selected_text(channel_label(*value)).show_ui(ui, |ui| {
         if allow_none {
             changed |= ui.selectable_value(value, -1, "None").changed();
         }
@@ -51,55 +28,81 @@ pub fn channel_combo(ui: &mut Ui, id: &str, value: &mut i32, channels: u16, allo
     changed
 }
 
+fn child(ui: &mut Ui, rect: Rect) -> Ui {
+    ui.new_child(UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)))
+}
+
 pub fn corner(app: &mut CueLineApp, ui: &mut Ui, rect: Rect) {
-    ui.painter().rect_filled(rect, CornerRadius::ZERO, theme::BG_HEADER);
-    let mut child = ui.new_child(
-        UiBuilder::new()
-            .max_rect(rect.shrink2(vec2(10.0, 4.0)))
-            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    let p = ui.painter();
+    p.rect_filled(rect, CornerRadius::ZERO, theme::BG_PANEL);
+    p.text(
+        pos2(rect.left() + 14.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        "Tracks",
+        fonts::semibold(13.0),
+        theme::TEXT,
     );
-    child.label(RichText::new("TRACKS").small().strong().color(theme::TEXT_DIM));
-    child.label(RichText::new(format!("{}", app.tracks.len())).small().color(theme::TEXT_FAINT));
-    child.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        if ui.small_button("+ Import").on_hover_text("Import audio files (Ctrl+I)").clicked() {
+    let count_x =
+        rect.left() + 14.0 + p.layout_no_wrap("Tracks".into(), fonts::semibold(13.0), theme::TEXT).size().x + 7.0;
+    p.text(
+        pos2(count_x, rect.center().y),
+        Align2::LEFT_CENTER,
+        app.tracks.len().to_string(),
+        fonts::text(12.0),
+        theme::TEXT_FAINT,
+    );
+    let mut c = child(ui, rect.shrink2(vec2(10.0, 0.0)));
+    c.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if tool_button(ui, Icon::Plus, false, theme::TEXT, vec2(28.0, 26.0))
+            .on_hover_text("Import audio (Ctrl+I)")
+            .clicked()
+        {
             super::menus::import_dialog(app);
         }
     });
 }
 
 pub fn ltc_header(app: &mut CueLineApp, ui: &mut Ui, rect: Rect) {
-    ui.painter().rect_filled(rect, CornerRadius::ZERO, theme::BG_HEADER);
-    ui.painter().rect_filled(
-        Rect::from_min_size(rect.left_top(), vec2(4.0, rect.height())),
-        CornerRadius::ZERO,
-        theme::LTC,
-    );
-    let mut child = ui.new_child(
-        UiBuilder::new()
-            .max_rect(rect.shrink2(vec2(10.0, 4.0)).translate(vec2(2.0, 0.0)))
-            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-    );
-    let ui = &mut child;
-    ui.spacing_mut().item_spacing.x = 5.0;
-    let mut changed = false;
+    let p = ui.painter();
+    p.rect_filled(rect, CornerRadius::ZERO, theme::BG_HEADER);
     let on = app.project.ltc.enabled;
-    if toggle_chip(ui, "ON", on, theme::LTC, "Enable LTC output").clicked() {
-        app.project.ltc.enabled = !on;
-        changed = true;
-    }
-    ui.label(RichText::new("LTC").strong().color(if on { theme::LTC } else { theme::TEXT_DIM }));
-    let channels = app.output_channels();
-    changed |= channel_combo(ui, "ltc_out", &mut app.project.ltc.channel, channels, true);
-    changed |= ui
-        .add(
-            egui::DragValue::new(&mut app.project.ltc.level_db)
-                .range(-40.0..=0.0)
-                .speed(0.2)
-                .suffix(" dB")
-                .fixed_decimals(1),
-        )
-        .on_hover_text("LTC level (dBFS peak)")
-        .changed();
+    // Orange "TC" badge.
+    let badge = Rect::from_center_size(pos2(rect.left() + 26.0, rect.center().y), vec2(26.0, 20.0));
+    p.rect_filled(badge, CornerRadius::same(5), if on { theme::LTC } else { theme::BG_WIDGET });
+    p.text(
+        badge.center(),
+        Align2::CENTER_CENTER,
+        "TC",
+        fonts::semibold(10.5),
+        if on { Color32::from_rgb(0x1a, 0x12, 0x02) } else { theme::TEXT_DIM },
+    );
+    p.text(
+        pos2(badge.right() + 10.0, rect.center().y - 7.0),
+        Align2::LEFT_CENTER,
+        "Timecode",
+        fonts::medium(13.0),
+        theme::TEXT,
+    );
+    p.text(
+        pos2(badge.right() + 10.0, rect.center().y + 8.0),
+        Align2::LEFT_CENTER,
+        format!("LTC · {} fps", app.project.frame_rate.label()),
+        fonts::text(11.0),
+        theme::TEXT_DIM,
+    );
+
+    let mut c = child(ui, rect.shrink2(vec2(12.0, 0.0)));
+    let mut changed = false;
+    c.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        let mut enabled = app.project.ltc.enabled;
+        if switch(ui, &mut enabled).on_hover_text("LTC output").changed() {
+            app.project.ltc.enabled = enabled;
+            changed = true;
+        }
+        let channels = app.output_channels();
+        changed |= channel_combo(ui, "ltc_out", &mut app.project.ltc.channel, channels, true);
+    });
     if changed {
         app.dirty = true;
         app.apply_project_to_engine();
@@ -120,30 +123,35 @@ pub fn track_headers(app: &mut CueLineApp, ui: &mut Ui, area: Rect) {
         }
         let selected = app.view.selected_track == Some(id);
         let painter = ui.painter_at(area);
-        painter.rect_filled(row, CornerRadius::ZERO, if selected { theme::BG_WIDGET } else { theme::BG_HEADER });
-        painter.hline(row.x_range(), row.bottom() - 0.5, Stroke::new(1.0, theme::BG_DEEP));
+        painter.rect_filled(row, CornerRadius::ZERO, if selected { theme::BG_SELECTED } else { theme::BG_HEADER });
+        painter.hline(row.x_range(), row.bottom() - 0.5, Stroke::new(1.0, theme::HAIRLINE));
+        let color = theme::rgb(app.tracks[i].def.color);
+        let bar =
+            Rect::from_min_max(pos2(row.left() + 7.0, row.top() + 9.0), pos2(row.left() + 10.0, row.bottom() - 9.0));
+        painter.rect_filled(bar, CornerRadius::same(2), color);
 
         let bg = ui.interact(row.intersect(area), ui.id().with(("track_row", id)), Sense::click());
         if bg.clicked() {
             select = Some(id);
         }
+        let hovered = ui.rect_contains_pointer(row.intersect(area));
 
-        let mut child = ui.new_child(UiBuilder::new().max_rect(row.shrink2(vec2(10.0, 6.0)).translate(vec2(2.0, 0.0))));
-        child.set_clip_rect(area);
+        // Vertical meter on the right edge.
         let peak = app.tracks[i].params.peak.take();
         let shown = app.ui.meter(METER_TRACK + id, peak);
-        let action = header_contents(app, &mut child, i, shown);
-        match action {
+        let meter =
+            Rect::from_min_max(pos2(row.right() - 14.0, row.top() + 9.0), pos2(row.right() - 8.0, row.bottom() - 9.0));
+        paint_vmeter(&painter, meter, &[shown]);
+
+        let content =
+            Rect::from_min_max(pos2(row.left() + 18.0, row.top() + 7.0), pos2(meter.left() - 8.0, row.bottom() - 7.0));
+        let mut c = ui.new_child(UiBuilder::new().max_rect(content));
+        c.set_clip_rect(area.intersect(row));
+        match header_contents(app, &mut c, i, hovered) {
             HeaderAction::Remove => remove = Some(id),
             HeaderAction::Select => select = Some(id),
             HeaderAction::None => {}
         }
-        let t = &app.tracks[i];
-        painter.rect_filled(
-            Rect::from_min_size(row.left_top(), vec2(4.0, h - 1.0)),
-            CornerRadius::ZERO,
-            theme::rgb(t.def.color),
-        );
     }
     if let Some(id) = select {
         app.view.selected_track = Some(id);
@@ -159,19 +167,27 @@ enum HeaderAction {
     Remove,
 }
 
-fn header_contents(app: &mut CueLineApp, ui: &mut Ui, i: usize, meter: f32) -> HeaderAction {
+fn header_contents(app: &mut CueLineApp, ui: &mut Ui, i: usize, hovered: bool) -> HeaderAction {
     let mut action = HeaderAction::None;
     let id = app.tracks[i].id;
     let mut changed = false;
     let mut checkpoint = false;
     let before = app.tracks[i].def.clone();
-    ui.spacing_mut().item_spacing = vec2(4.0, 5.0);
+    ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
 
+    // Row 1: number, name, mute / solo.
     ui.horizontal(|ui| {
+        ui.set_height(20.0);
+        let n = RichText::new(format!("{}", i + 1)).font(fonts::semibold(11.0)).color(theme::TEXT_FAINT);
+        ui.allocate_ui_with_layout(vec2(14.0, 20.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            ui.set_width(14.0);
+            ui.label(n)
+        });
         let editing = app.ui.rename_track.as_ref().is_some_and(|(rid, _)| *rid == id);
+        let name_w = (ui.available_width() - 54.0).max(40.0);
         if editing {
             let (_, text) = app.ui.rename_track.as_mut().unwrap();
-            let r = ui.add(egui::TextEdit::singleline(text).desired_width(120.0));
+            let r = ui.add(egui::TextEdit::singleline(text).font(fonts::medium(13.0)).desired_width(name_w));
             r.request_focus();
             if r.lost_focus() {
                 let (_, name) = app.ui.rename_track.take().unwrap();
@@ -183,14 +199,21 @@ fn header_contents(app: &mut CueLineApp, ui: &mut Ui, i: usize, meter: f32) -> H
             }
         } else {
             let t = &app.tracks[i];
-            let mut name = RichText::new(&t.def.name).color(theme::TEXT);
-            if let TrackState::Failed(_) = t.state {
-                name = name.color(theme::ERROR);
-            }
-            let r = ui.add(egui::Label::new(name).truncate().sense(Sense::click())).on_hover_text(match &t.state {
+            let color = if matches!(t.state, TrackState::Failed(_)) { theme::RED } else { theme::TEXT };
+            let label = egui::Label::new(RichText::new(&t.def.name).font(fonts::medium(13.0)).color(color))
+                .truncate()
+                .sense(Sense::click());
+            let hover = match &t.state {
                 TrackState::Failed(e) => format!("{}\n{e}", t.def.path.display()),
                 _ => format!("{}\nDouble-click to rename", t.def.path.display()),
-            });
+            };
+            let r = ui
+                .allocate_ui_with_layout(vec2(name_w, 20.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.set_width(name_w);
+                    ui.add(label)
+                })
+                .inner
+                .on_hover_text(hover);
             if r.double_clicked() {
                 app.ui.rename_track = Some((id, app.tracks[i].def.name.clone()));
             } else if r.clicked() {
@@ -198,71 +221,56 @@ fn header_contents(app: &mut CueLineApp, ui: &mut Ui, i: usize, meter: f32) -> H
             }
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui
-                .add(egui::Button::new(RichText::new("×").size(14.0).color(theme::TEXT_DIM)).frame(false))
-                .on_hover_text("Remove track")
-                .clicked()
-            {
-                action = HeaderAction::Remove;
-            }
+            ui.spacing_mut().item_spacing.x = 4.0;
             let def = &mut app.tracks[i].def;
-            if toggle_chip(ui, "S", def.solo, theme::SOLO, "Solo").clicked() {
-                checkpoint = true;
+            if chip(ui, "S", def.solo, theme::SOLO, "Solo").clicked() {
                 def.solo = !def.solo;
+                checkpoint = true;
                 changed = true;
             }
-            if toggle_chip(ui, "M", def.mute, theme::MUTE, "Mute").clicked() {
-                checkpoint = true;
+            if chip(ui, "M", def.mute, theme::MUTE, "Mute").clicked() {
                 def.mute = !def.mute;
+                checkpoint = true;
                 changed = true;
             }
         });
     });
 
+    // Row 2: fader, value, pan, remove.
     ui.horizontal(|ui| {
+        ui.set_height(20.0);
+        ui.add_space(20.0);
+        let color = theme::rgb(app.tracks[i].def.color);
         let def = &mut app.tracks[i].def;
-        let vol = ui
-            .add(
-                egui::DragValue::new(&mut def.gain_db)
-                    .range(-60.0..=12.0)
-                    .speed(0.1)
-                    .fixed_decimals(1)
-                    .prefix("Vol ")
-                    .suffix(" dB"),
-            )
-            .on_hover_text("Volume (double-click to type, Ctrl+click: 0 dB)");
-        if vol.drag_started() {
+        let w = (ui.available_width() - 92.0).clamp(60.0, 160.0);
+        let f = fader(ui, &mut def.gain_db, w, color);
+        if f.drag_started() || f.double_clicked() {
             checkpoint = true;
         }
-        if vol.clicked() && ui.input(|i| i.modifiers.command) {
-            def.gain_db = 0.0;
-            changed = true;
-        }
-        changed |= vol.changed();
-        let mut pan = def.pan * 100.0;
-        let pan_resp = ui
-            .add(egui::DragValue::new(&mut pan).range(-100.0..=100.0).speed(0.5).fixed_decimals(0).custom_formatter(
-                |v, _| match v.round() as i32 {
-                    0 => "C".into(),
-                    v if v < 0 => format!("{}L", -v),
-                    v => format!("{v}R"),
-                },
-            ))
-            .on_hover_text("Pan");
-        if pan_resp.drag_started() {
+        changed |= f.changed();
+        let (vr, _) = ui.allocate_exact_size(vec2(38.0, 20.0), Sense::hover());
+        let text = if def.gain_db <= -59.9 { "−∞".to_string() } else { format!("{:+.1}", def.gain_db) };
+        tabular(
+            ui.painter(),
+            pos2(vr.right(), vr.center().y),
+            Align2::RIGHT_CENTER,
+            &text,
+            fonts::text(11.0),
+            theme::TEXT_DIM,
+        );
+        let k = knob(ui, &mut def.pan, color);
+        if k.drag_started() || k.double_clicked() {
             checkpoint = true;
         }
-        if pan_resp.changed() {
-            def.pan = pan / 100.0;
-            changed = true;
+        changed |= k.changed();
+        if hovered {
+            let x = ui
+                .add(egui::Button::new(RichText::new("×").font(fonts::text(15.0)).color(theme::TEXT_DIM)).frame(false));
+            if x.on_hover_text("Remove track").clicked() {
+                action = HeaderAction::Remove;
+            }
         }
     });
-
-    let rect = ui.available_rect_before_wrap();
-    let meter_rect = Rect::from_min_size(pos2(rect.left(), rect.top() + 2.0), vec2(rect.width(), 5.0));
-    if meter_rect.bottom() < ui.clip_rect().bottom() + 6.0 {
-        paint_hmeter(ui.painter(), meter_rect, &[meter]);
-    }
 
     if checkpoint {
         // Record the state as it was before this frame's edit.

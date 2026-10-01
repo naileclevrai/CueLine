@@ -85,7 +85,7 @@ impl Default for ViewState {
         Self {
             px_per_sec: 40.0,
             scroll_secs: -1.0,
-            track_height: 76.0,
+            track_height: 72.0,
             scroll_y: 0.0,
             selected_track: None,
             selected_marker: None,
