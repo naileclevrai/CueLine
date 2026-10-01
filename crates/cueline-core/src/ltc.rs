@@ -327,7 +327,7 @@ mod tests {
         }
         for f in &frames {
             let label = f.frame.timecode().to_frames(rate) - start_tc.to_frames(rate);
-            let frame_end = rate.sample_at_frame(label + 1, sr) as i64;
+            let frame_end = rate.sample_at_frame(label + 1, sr);
             let err = f.end_sample as i64 - frame_end;
             assert!((0..=2).contains(&err), "{rate}@{sr}: frame end off by {err} samples");
         }

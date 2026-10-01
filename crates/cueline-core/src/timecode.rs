@@ -55,7 +55,7 @@ impl Timecode {
             return false;
         }
         // Labels ;00 and ;01 do not exist at the start of non-tenth minutes.
-        !(rate.is_drop() && self.seconds == 0 && self.frames < 2 && self.minutes % 10 != 0)
+        !(rate.is_drop() && self.seconds == 0 && self.frames < 2 && !self.minutes.is_multiple_of(10))
     }
 
     /// Parses `HH:MM:SS:FF` (any of `:;.,` as separators). Shorter inputs are
@@ -65,7 +65,7 @@ impl Timecode {
         let mut parts = [0u8; 4];
         let fields: Vec<&str> = text
             .trim()
-            .split(|c| matches!(c, ':' | ';' | '.' | ','))
+            .split([':', ';', '.', ','])
             .collect();
         if fields.is_empty() || fields.len() > 4 {
             return None;
