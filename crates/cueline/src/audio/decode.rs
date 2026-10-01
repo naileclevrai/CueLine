@@ -90,3 +90,37 @@ pub fn decode_file(path: &Path) -> Result<DecodedAudio, String> {
     }
     Ok(DecodedAudio { sample_rate, channels: out })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_24bit_stereo_wav() {
+        let path = std::env::temp_dir().join(format!("cueline-decode-{}.wav", std::process::id()));
+        let spec = hound::WavSpec { channels: 2, sample_rate: 44_100, bits_per_sample: 24, sample_format: hound::SampleFormat::Int };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        for i in 0..44_100 {
+            w.write_sample(if i == 1000 { 4_194_304 } else { 0 }).unwrap(); // +0.5 on the left
+            w.write_sample(-4_194_304).unwrap(); // -0.5 on the right
+        }
+        w.finalize().unwrap();
+
+        let a = decode_file(&path).unwrap();
+        assert_eq!(a.sample_rate, 44_100);
+        assert_eq!(a.channels.len(), 2);
+        assert_eq!(a.frames(), 44_100);
+        assert!((a.channels[0][1000] - 0.5).abs() < 1e-6);
+        assert!((a.channels[1][5] + 0.5).abs() < 1e-6);
+        assert!((a.duration_secs() - 1.0).abs() < 1e-9);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn rejects_non_audio() {
+        let path = std::env::temp_dir().join(format!("cueline-bad-{}.wav", std::process::id()));
+        std::fs::write(&path, b"definitely not audio").unwrap();
+        assert!(decode_file(&path).is_err());
+        std::fs::remove_file(&path).ok();
+    }
+}
