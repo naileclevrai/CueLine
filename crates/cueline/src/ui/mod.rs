@@ -3,6 +3,7 @@
 pub mod headers;
 pub mod markers;
 pub mod menus;
+pub mod prefs;
 pub mod ruler;
 pub mod shortcuts;
 pub mod theme;
@@ -40,11 +41,6 @@ pub struct ExportUi {
     pub open: bool,
 }
 
-#[derive(Default)]
-pub struct PrefsUi {
-    pub open: bool,
-}
-
 pub struct UiState {
     pub toasts: Vec<Toast>,
     /// Where the last playback started (Space returns there).
@@ -57,7 +53,7 @@ pub struct UiState {
     pub show_help: bool,
     pub zoom_to_fit: bool,
     pub export: ExportUi,
-    pub prefs: PrefsUi,
+    pub prefs: prefs::PrefsUi,
     pub last_title: String,
     pub closing: bool,
     meters: HashMap<u64, (f32, Instant)>,
@@ -75,7 +71,7 @@ impl Default for UiState {
             show_help: false,
             zoom_to_fit: false,
             export: ExportUi::default(),
-            prefs: PrefsUi::default(),
+            prefs: prefs::PrefsUi::default(),
             last_title: String::new(),
             closing: false,
             meters: HashMap::new(),
@@ -219,6 +215,7 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(theme::BG_LANE_ALT))
         .show(ui, |ui| timeline::draw(app, ui));
+    prefs::window(app, &ctx);
     draw_toasts(app, &ctx);
     drop_overlay(&ctx);
     window_chrome(app, &ctx);
