@@ -1,0 +1,11 @@
+[package]
+name = "cueline"
+description = "CueLine: a lightweight timeline player that generates sample-accurate LTC and MIDI Timecode."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+cueline-core = { path = "../cueline-core" }
