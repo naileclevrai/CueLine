@@ -136,7 +136,9 @@ fn next_cue(app: &CueLineApp, ui: &mut egui::Ui, pos: f64) {
                     let left = m.time_secs - pos;
                     let mins = (left / 60.0).floor();
                     let secs = left - mins * 60.0;
-                    ui.label(RichText::new(format!("-{mins:02}:{secs:04.1}")).font(theme::mono(19.0)).color(theme::TEXT));
+                    ui.label(
+                        RichText::new(format!("-{mins:02}:{secs:04.1}")).font(theme::mono(19.0)).color(theme::TEXT),
+                    );
                 }
                 None => {
                     ui.label(RichText::new("NEXT").small().color(theme::TEXT_FAINT));

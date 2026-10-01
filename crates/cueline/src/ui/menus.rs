@@ -206,7 +206,9 @@ pub fn track_context_menu(app: &mut CueLineApp, ui: &mut Ui) {
     }
     let offline = app.tracks.iter().any(|t| t.id == id && matches!(t.state, crate::app::TrackState::Failed(_)));
     if offline && ui.button("Locate missing file…").clicked() {
-        if let Some(path) = rfd::FileDialog::new().set_title("Locate audio file").add_filter("Audio", &AUDIO_EXTENSIONS).pick_file() {
+        if let Some(path) =
+            rfd::FileDialog::new().set_title("Locate audio file").add_filter("Audio", &AUDIO_EXTENSIONS).pick_file()
+        {
             app.relink_track(id, path);
         }
         ui.close();

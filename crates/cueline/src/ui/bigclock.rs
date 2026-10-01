@@ -14,7 +14,8 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
     let playing = app.is_playing();
     let rate = app.project.frame_rate;
     let tc = app.timecode_at(pos).display(rate).to_string();
-    let next = app.project.markers.iter().find(|m| m.time_secs > pos + 1e-4).map(|m| (m.name.clone(), m.time_secs - pos));
+    let next =
+        app.project.markers.iter().find(|m| m.time_secs > pos + 1e-4).map(|m| (m.name.clone(), m.time_secs - pos));
     let mut close = false;
 
     ctx.show_viewport_immediate(
@@ -32,7 +33,9 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
             let color = if playing { theme::PLAYING } else { theme::TEXT };
             p.text(rect.center() - egui::vec2(0.0, size * 0.15), Align2::CENTER_CENTER, &tc, theme::mono(size), color);
             let info = match &next {
-                Some((name, left)) => format!("NEXT  {}  in {:.1}s", if name.is_empty() { "marker" } else { name }, left),
+                Some((name, left)) => {
+                    format!("NEXT  {}  in {:.1}s", if name.is_empty() { "marker" } else { name }, left)
+                }
                 None => format!("{} fps", rate.label()),
             };
             p.text(

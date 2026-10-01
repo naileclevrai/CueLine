@@ -98,7 +98,12 @@ mod tests {
     #[test]
     fn decodes_24bit_stereo_wav() {
         let path = std::env::temp_dir().join(format!("cueline-decode-{}.wav", std::process::id()));
-        let spec = hound::WavSpec { channels: 2, sample_rate: 44_100, bits_per_sample: 24, sample_format: hound::SampleFormat::Int };
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: 44_100,
+            bits_per_sample: 24,
+            sample_format: hound::SampleFormat::Int,
+        };
         let mut w = hound::WavWriter::create(&path, spec).unwrap();
         for i in 0..44_100 {
             w.write_sample(if i == 1000 { 4_194_304 } else { 0 }).unwrap(); // +0.5 on the left

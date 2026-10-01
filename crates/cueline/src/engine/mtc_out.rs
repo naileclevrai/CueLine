@@ -254,7 +254,9 @@ mod tests {
     use crate::engine::clock::ClockSnapshot;
     use std::sync::Mutex;
 
-    struct Recorder(Arc<Mutex<Vec<(u64, Vec<u8>)>>>);
+    type SendLog = Arc<Mutex<Vec<(u64, Vec<u8>)>>>;
+
+    struct Recorder(SendLog);
 
     impl MidiSink for Recorder {
         fn send(&mut self, bytes: &[u8]) -> Result<(), String> {
