@@ -103,8 +103,52 @@ impl UiState {
     }
 }
 
+/// Imports dropped audio files, or opens a dropped project.
+fn handle_dropped_files(app: &mut CueLineApp, ctx: &egui::Context) {
+    let dropped: Vec<std::path::PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).filter(|p| !p.as_os_str().is_empty()).collect());
+    if dropped.is_empty() {
+        return;
+    }
+    let is_project = |p: &std::path::PathBuf| {
+        p.extension().is_some_and(|e| e.eq_ignore_ascii_case(crate::project::EXTENSION))
+    };
+    if let Some(project) = dropped.iter().find(|p| is_project(p)) {
+        if app.confirm_discard() {
+            app.open_project(project);
+        }
+        return;
+    }
+    let audio: Vec<_> = dropped
+        .into_iter()
+        .filter(|p| {
+            p.extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| menus::AUDIO_EXTENSIONS.iter().any(|a| a.eq_ignore_ascii_case(e)))
+        })
+        .collect();
+    if audio.is_empty() {
+        app.ui.toast_error("Unsupported file type".into());
+    } else {
+        app.import_files(audio);
+    }
+}
+
+/// Shows a hint overlay while files are dragged over the window.
+fn drop_overlay(ctx: &egui::Context) {
+    if ctx.input(|i| i.raw.hovered_files.is_empty()) {
+        return;
+    }
+    let rect = ctx.content_rect();
+    let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("drop")));
+    p.rect_filled(rect, 0.0, egui::Color32::from_black_alpha(160));
+    p.rect_stroke(rect.shrink(12.0), 6.0, egui::Stroke::new(2.0, theme::ACCENT), egui::StrokeKind::Inside);
+    p.text(rect.center(), egui::Align2::CENTER_CENTER, "Drop audio files to import, or a .cueline project to open", egui::FontId::proportional(18.0), theme::TEXT);
+}
+
 pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
-    shortcuts::handle(app, &ui.ctx().clone());
+    let ctx = ui.ctx().clone();
+    shortcuts::handle(app, &ctx);
+    handle_dropped_files(app, &ctx);
     egui::Panel::top("menu")
         .frame(egui::Frame::new().fill(theme::BG_DEEP).inner_margin(egui::Margin::symmetric(6, 2)))
         .show(ui, |ui| menus::menu_bar(app, ui));
@@ -115,4 +159,5 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(theme::BG_LANE_ALT))
         .show(ui, |ui| timeline::draw(app, ui));
+    drop_overlay(&ctx);
 }
