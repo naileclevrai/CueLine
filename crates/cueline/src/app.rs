@@ -357,6 +357,13 @@ impl CueLineApp {
             clip_rate: 0,
             state: TrackState::Loading,
         });
+        self.spawn_load(id, path);
+        self.dirty = true;
+        id
+    }
+
+    /// Decodes, analyses and resamples a file on a worker thread.
+    fn spawn_load(&self, id: u64, path: PathBuf) {
         let (tx, sr, ctx) = (self.load_tx.clone(), self.sample_rate(), self.ctx.clone());
         std::thread::spawn(move || {
             let msg = (|| {
@@ -375,8 +382,29 @@ impl CueLineApp {
             let _ = tx.send(msg);
             ctx.request_repaint();
         });
+    }
+
+    /// Points an offline track at a new file and reloads it.
+    pub fn relink_track(&mut self, id: u64, path: PathBuf) {
+        self.checkpoint();
+        if let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) {
+            t.def.path = path.clone();
+            t.state = TrackState::Loading;
+            self.spawn_load(id, path);
+            self.dirty = true;
+        }
+    }
+
+    /// Moves a track one row up (`-1`) or down (`+1`).
+    pub fn move_track(&mut self, id: u64, delta: isize) {
+        let Some(i) = self.tracks.iter().position(|t| t.id == id) else { return };
+        let j = i as isize + delta;
+        if j < 0 || j as usize >= self.tracks.len() {
+            return;
+        }
+        self.checkpoint();
+        self.tracks.swap(i, j as usize);
         self.dirty = true;
-        id
     }
 
     pub fn import_files(&mut self, paths: Vec<PathBuf>) {
