@@ -1,235 +1,242 @@
-//! Top transport bar: big timecode display, transport controls, I/O status.
+//! Unified toolbar: transport controls, the central LCD and I/O status.
 
 use std::sync::atomic::Ordering;
 
 use cueline_core::Timecode;
-use eframe::egui::{self, CornerRadius, RichText, Stroke};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, CornerRadius, Rect, Sense, Stroke, StrokeKind};
 
-use super::theme;
-use super::widgets::{hmeter, icon_button, status_chip, Icon};
-use super::{METER_LTC, METER_MASTER_L, METER_MASTER_R};
+use super::widgets::{button_group, paint_icon, paint_vmeter, pill, tabular, tool_button, Icon};
+use super::{fonts, theme};
+use super::{METER_MASTER_L, METER_MASTER_R};
 use crate::app::CueLineApp;
+
+pub const HEIGHT: f32 = 58.0;
+const LCD_W: f32 = 520.0;
+const LCD_H: f32 = 46.0;
 
 pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     let playing = app.is_playing();
     let pos = app.position_secs();
-    ui.horizontal_centered(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        timecode_display(app, ui, pos, playing);
-        next_cue(app, ui, pos);
-        ui.add_space(8.0);
+    let rect = ui.max_rect();
 
-        if icon_button(ui, Icon::ToStart, false, theme::TEXT).on_hover_text("Go to start (Home)").clicked() {
-            app.seek(0.0);
-        }
-        let (icon, tip) = if playing { (Icon::Pause, "Pause (Shift+Space)") } else { (Icon::Play, "Play (Space)") };
-        if icon_button(ui, icon, playing, theme::PLAYING).on_hover_text(tip).clicked() {
-            if playing {
-                app.pause();
-            } else {
-                app.play();
-            }
-        }
-        if icon_button(ui, Icon::Stop, false, theme::TEXT).on_hover_text("Stop and return (Space)").clicked() {
-            if playing {
-                app.stop();
-            } else {
+    // Centre the LCD in the window when there is room, otherwise after the
+    // transport group.
+    let lcd_x = (rect.center().x - LCD_W / 2.0).max(rect.left() + 236.0);
+    let lcd = Rect::from_min_size(pos2(lcd_x, rect.center().y - LCD_H / 2.0), vec2(LCD_W, LCD_H));
+    lcd_display(app, ui, lcd, pos, playing);
+
+    ui.horizontal_centered(|ui| {
+        ui.add_space(14.0);
+        let size = vec2(34.0, 28.0);
+        button_group(ui, |ui| {
+            if tool_button(ui, Icon::ToStart, false, theme::TEXT, size).on_hover_text("Go to start (Home)").clicked() {
                 app.seek(0.0);
             }
-        }
-        if icon_button(ui, Icon::ToEnd, false, theme::TEXT).on_hover_text("Go to end (End)").clicked() {
-            app.seek(app.project_end_secs());
-        }
+            if tool_button(ui, Icon::Stop, false, theme::TEXT, size).on_hover_text("Stop (Space)").clicked() {
+                if playing {
+                    app.stop();
+                } else {
+                    app.seek(0.0);
+                }
+            }
+            let (icon, tip) = if playing { (Icon::Pause, "Pause (Shift+Space)") } else { (Icon::Play, "Play (Space)") };
+            if tool_button(ui, icon, playing, theme::GREEN, size).on_hover_text(tip).clicked() {
+                if playing {
+                    app.pause();
+                } else {
+                    app.play();
+                }
+            }
+            if tool_button(ui, Icon::ToEnd, false, theme::TEXT, size).on_hover_text("Go to end (End)").clicked() {
+                app.seek(app.project_end_secs());
+            }
+        });
+        ui.add_space(6.0);
         let follow = app.settings.follow_playhead;
-        if icon_button(ui, Icon::Follow, follow, theme::ACCENT).on_hover_text("Follow playhead (F)").clicked() {
+        if tool_button(ui, Icon::Follow, follow, theme::BLUE, vec2(32.0, 28.0)).on_hover_text("Follow playhead (F)").clicked() {
             app.settings.follow_playhead = !follow;
         }
-
-        ui.add_space(12.0);
-        io_status(app, ui, playing);
     });
-}
 
-fn timecode_display(app: &mut CueLineApp, ui: &mut egui::Ui, pos: f64, playing: bool) {
-    let rate = app.project.frame_rate;
-    let tc = app.timecode_at(pos);
-    let frame = egui::Frame::new()
-        .fill(theme::BG_DEEP)
-        .stroke(Stroke::new(1.0, if playing { theme::PLAYING.gamma_multiply(0.5) } else { theme::BORDER }))
-        .corner_radius(CornerRadius::same(4))
-        .inner_margin(egui::Margin { left: 12, right: 12, top: 2, bottom: 3 });
-    frame.show(ui, |ui| {
-        ui.set_min_width(250.0);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            if let Some(text) = &mut app.ui.goto_text {
-                let edit = ui.add(
-                    egui::TextEdit::singleline(text)
-                        .font(theme::mono(28.0))
-                        .desired_width(230.0)
-                        .frame(egui::Frame::NONE)
-                        .hint_text("HH:MM:SS:FF"),
-                );
-                edit.request_focus();
-                let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
-                let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
-                if enter {
-                    let text = text.clone();
-                    match Timecode::parse(&text, rate) {
-                        Some(tc) => {
-                            app.ui.goto_text = None;
-                            app.seek_timecode(tc);
-                        }
-                        None => app.ui.toast_error(format!("\"{text}\" is not a valid {rate} timecode")),
-                    }
-                } else if escape || edit.lost_focus() {
-                    app.ui.goto_text = None;
-                }
-            } else {
-                let color = if playing { theme::PLAYING } else { theme::TEXT };
-                let resp = ui
-                    .add(
-                        egui::Label::new(
-                            RichText::new(tc.display(rate).to_string()).font(theme::mono(28.0)).color(color),
-                        )
-                        .sense(egui::Sense::click()),
-                    )
-                    .on_hover_text("Click to go to a timecode (G)");
-                if resp.clicked() {
-                    app.ui.goto_text = Some(tc.to_string());
-                }
-            }
-            ui.horizontal(|ui| {
-                let secs = pos.max(0.0);
-                let sign = if pos < 0.0 { "-" } else { "" };
-                let m = (secs / 60.0).floor();
-                let s = secs - m * 60.0;
-                ui.label(
-                    RichText::new(format!("{sign}{m:02}:{s:06.3}")).font(theme::mono(11.5)).color(theme::TEXT_DIM),
-                );
-                ui.add_space(6.0);
-                ui.label(RichText::new(format!("{} fps", rate.label())).font(theme::mono(11.5)).color(theme::LTC));
-                if rate.is_drop() {
-                    ui.label(RichText::new("DF").font(theme::mono(11.5)).color(theme::WARN));
-                }
-            });
-        });
-    });
-}
-
-/// Name of the next marker and a countdown to it.
-fn next_cue(app: &CueLineApp, ui: &mut egui::Ui, pos: f64) {
-    let next = app.project.markers.iter().enumerate().find(|(_, m)| m.time_secs > pos + 1e-4);
-    let frame = egui::Frame::new()
-        .fill(theme::BG_DEEP)
-        .stroke(Stroke::new(1.0, theme::BORDER))
-        .corner_radius(CornerRadius::same(4))
-        .inner_margin(egui::Margin { left: 10, right: 10, top: 5, bottom: 5 });
-    frame.show(ui, |ui| {
-        ui.set_min_width(130.0);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 1.0;
-            match next {
-                Some((i, m)) => {
-                    let name = if m.name.is_empty() { format!("Marker {}", i + 1) } else { m.name.clone() };
-                    ui.label(RichText::new(format!("NEXT · {}", name)).small().color(theme::rgb(m.color)));
-                    let left = m.time_secs - pos;
-                    let mins = (left / 60.0).floor();
-                    let secs = left - mins * 60.0;
-                    ui.label(
-                        RichText::new(format!("-{mins:02}:{secs:04.1}")).font(theme::mono(19.0)).color(theme::TEXT),
-                    );
-                }
-                None => {
-                    ui.label(RichText::new("NEXT").small().color(theme::TEXT_FAINT));
-                    ui.label(RichText::new("--:--.-").font(theme::mono(19.0)).color(theme::TEXT_FAINT));
-                }
-            }
-        });
-    });
-}
-
-fn io_status(app: &mut CueLineApp, ui: &mut egui::Ui, playing: bool) {
-    let sh = app.shared.clone();
-    let channels = app.output_channels() as i32;
-
-    let ltc_on = app.project.ltc.enabled && app.project.ltc.channel >= 0 && app.project.ltc.channel < channels;
-    let ltc_detail = if ltc_on {
-        format!("out {} · {:.0} dB", app.project.ltc.channel + 1, app.project.ltc.level_db)
-    } else if app.project.ltc.enabled {
-        "not routed".into()
-    } else {
-        "off".into()
-    };
-    let ltc_active = ltc_on && playing;
-    if status_chip(ui, "LTC", &ltc_detail, ltc_active, theme::LTC).on_hover_text("Click to toggle LTC output").clicked()
-    {
-        app.project.ltc.enabled = !app.project.ltc.enabled;
-        app.dirty = true;
-        app.apply_project_to_engine();
+    // Right side, laid out from the right edge.
+    let right = Rect::from_min_max(pos2(lcd.right() + 12.0, rect.top()), pos2(rect.right() - 12.0, rect.bottom()));
+    if right.width() > 40.0 {
+        let mut child =
+            ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
+        io_status(app, &mut child);
     }
-    let ltc = app.ui.meter(METER_LTC, sh.ltc_peak.take());
-    hmeter(ui, 46.0, 8.0, &[ltc]);
+}
 
+fn lcd_display(app: &mut CueLineApp, ui: &mut egui::Ui, lcd: Rect, pos: f64, playing: bool) {
+    let rate = app.project.frame_rate;
+    let p = ui.painter().clone();
+    // Recessed glass: dark body, faint bottom highlight, hairline edge.
+    p.rect_filled(lcd.translate(vec2(0.0, 1.0)), CornerRadius::same(9), Color32::from_white_alpha(10));
+    p.rect_filled(lcd, CornerRadius::same(9), theme::LCD);
+    p.rect_stroke(lcd, CornerRadius::same(9), Stroke::new(1.0, Color32::from_black_alpha(160)), StrokeKind::Inside);
+
+    let label_font = fonts::semibold(8.5);
+    // Two bands: values centred in the upper one, captions in the lower one.
+    let value_y = lcd.top() + 19.0;
+    let caption_y = lcd.bottom() - 9.0;
+    let sections = [lcd.left() + 236.0, lcd.left() + 352.0];
+    for x in sections {
+        p.vline(x, (lcd.top() + 9.0)..=(lcd.bottom() - 9.0), Stroke::new(1.0, Color32::from_rgb(0x2a, 0x2b, 0x2f)));
+    }
+
+    // 1. Timecode.
+    let tc_area = Rect::from_min_max(lcd.left_top(), pos2(sections[0], lcd.bottom()));
+    let state_c = pos2(tc_area.left() + 16.0, value_y);
+    if playing {
+        paint_icon(&p, Icon::Play, state_c, 7.0, theme::GREEN);
+    } else {
+        paint_icon(&p, Icon::Stop, state_c, 6.0, theme::TEXT_FAINT);
+    }
+    let tc = app.timecode_at(pos);
+    let tc_pos = pos2(tc_area.left() + 30.0, value_y);
+    if app.ui.goto_text.is_none() {
+        tabular(&p, tc_pos, Align2::LEFT_CENTER, &tc.display(rate).to_string(), fonts::display_light(25.0), theme::TEXT);
+    }
+    let caption = if rate.is_drop() {
+        format!("TIMECODE  ·  {} DF", rate.label())
+    } else {
+        format!("TIMECODE  ·  {} FPS", rate.label())
+    };
+    p.text(pos2(tc_area.left() + 31.0, caption_y), Align2::LEFT_CENTER, caption, label_font.clone(), theme::TEXT_FAINT);
+
+    let resp = ui.interact(tc_area, ui.id().with("lcd_tc"), Sense::click());
+    if resp.clicked() && app.ui.goto_text.is_none() {
+        app.ui.goto_text = Some(tc.to_string());
+    }
+    resp.on_hover_text("Click to go to a timecode (G)");
+    if app.ui.goto_text.is_some() {
+        goto_editor(app, ui, Rect::from_min_size(tc_pos - vec2(0.0, 15.0), vec2(196.0, 30.0)), rate);
+    }
+
+    // 2. Elapsed time since project start.
+    let secs = pos.max(0.0);
+    let m = (secs / 60.0).floor();
+    let s = secs - m * 60.0;
+    let elapsed = format!("{}{m:02}:{s:05.2}", if pos < 0.0 { "-" } else { "" });
+    let ex = sections[0] + 14.0;
+    tabular(&p, pos2(ex, value_y), Align2::LEFT_CENTER, &elapsed, fonts::display(16.0), theme::TEXT_DIM);
+    p.text(pos2(ex + 1.0, caption_y), Align2::LEFT_CENTER, "ELAPSED", label_font.clone(), theme::TEXT_FAINT);
+
+    // 3. Next cue.
+    let nx = sections[1] + 14.0;
+    match app.project.markers.iter().enumerate().find(|(_, m)| m.time_secs > pos + 1e-4) {
+        Some((i, mk)) => {
+            let left = mk.time_secs - pos;
+            let m = (left / 60.0).floor();
+            let s = left - m * 60.0;
+            let soon = left < 5.0 && playing;
+            let color = if soon { theme::ORANGE } else { theme::TEXT };
+            tabular(&p, pos2(nx, value_y), Align2::LEFT_CENTER, &format!("−{m:02}:{s:04.1}"), fonts::display(16.0), color);
+            let name = if mk.name.is_empty() { format!("Marker {}", i + 1) } else { mk.name.clone() };
+            let dot = pos2(nx + 3.0, caption_y);
+            p.circle_filled(dot, 3.0, theme::rgb(mk.color));
+            let galley = p.layout_no_wrap(name.to_uppercase(), label_font.clone(), theme::TEXT_DIM);
+            let clip = Rect::from_min_max(pos2(nx + 10.0, lcd.top()), pos2(lcd.right() - 10.0, lcd.bottom()));
+            p.with_clip_rect(clip).galley(pos2(nx + 10.0, caption_y - galley.size().y / 2.0), galley, theme::TEXT_DIM);
+        }
+        None => {
+            tabular(&p, pos2(nx, value_y), Align2::LEFT_CENTER, "−−:−−.−", fonts::display(16.0), theme::TEXT_QUATERNARY);
+            p.text(pos2(nx + 1.0, caption_y), Align2::LEFT_CENTER, "NEXT CUE", label_font, theme::TEXT_FAINT);
+        }
+    }
+}
+
+fn goto_editor(app: &mut CueLineApp, ui: &mut egui::Ui, rect: Rect, rate: cueline_core::FrameRate) {
+    let Some(text) = &mut app.ui.goto_text else { return };
+    let edit = ui.put(
+        rect,
+        egui::TextEdit::singleline(text)
+            .font(fonts::display_light(24.0))
+            .text_color(theme::ORANGE)
+            .frame(egui::Frame::NONE)
+            .hint_text("HH:MM:SS:FF"),
+    );
+    edit.request_focus();
+    let (enter, escape) = ui.input(|i| (i.key_pressed(egui::Key::Enter), i.key_pressed(egui::Key::Escape)));
+    if enter {
+        let text = text.clone();
+        match Timecode::parse(&text, rate) {
+            Some(tc) => {
+                app.ui.goto_text = None;
+                app.seek_timecode(tc);
+            }
+            None => app.ui.toast_error(format!("\"{text}\" is not a valid {rate} timecode")),
+        }
+    } else if escape || edit.lost_focus() {
+        app.ui.goto_text = None;
+    }
+}
+
+fn io_status(app: &mut CueLineApp, ui: &mut egui::Ui) {
+    let sh = app.shared.clone();
+    ui.spacing_mut().item_spacing.x = 8.0;
+
+    if tool_button(ui, Icon::Sidebar, app.ui.show_markers, theme::BLUE, vec2(32.0, 28.0))
+        .on_hover_text("Show cue list")
+        .clicked()
+    {
+        app.ui.show_markers = !app.ui.show_markers;
+    }
+    if tool_button(ui, Icon::Gear, false, theme::TEXT, vec2(32.0, 28.0)).on_hover_text("Settings (Ctrl+,)").clicked() {
+        app.ui.prefs.open = true;
+    }
+    if tool_button(ui, Icon::Clock, app.ui.show_big_clock, theme::ORANGE, vec2(32.0, 28.0))
+        .on_hover_text("Big timecode window (B)")
+        .clicked()
+    {
+        app.ui.show_big_clock = !app.ui.show_big_clock;
+    }
+
+    // Master meter.
+    let l = app.ui.meter(METER_MASTER_L, sh.master_peak[0].take());
+    let r = app.ui.meter(METER_MASTER_R, sh.master_peak[1].take());
+    let (m, _) = ui.allocate_exact_size(vec2(9.0, 34.0), Sense::hover());
+    paint_vmeter(ui.painter(), m, &[l, r]);
+
+    if ui.available_width() < 120.0 {
+        return;
+    }
     let mtc = &app.mtc.status;
     let connected = mtc.connected.load(Ordering::Relaxed);
-    let sending = mtc.sending.load(Ordering::Relaxed);
-    let mtc_detail = match (&app.project.mtc.port, app.project.mtc.enabled) {
-        (_, false) => "off".to_string(),
-        (None, true) => "no port".to_string(),
-        (Some(p), true) if connected => short(p, 18),
-        (Some(_), true) => "port error".to_string(),
-    };
     let mtc_on = app.project.mtc.enabled && connected;
-    let hover = mtc.error.lock().unwrap().clone().unwrap_or_else(|| "Click to toggle MIDI Timecode output".into());
-    if status_chip(ui, "MTC", &mtc_detail, mtc_on && (sending || !playing), theme::MTC).on_hover_text(hover).clicked() {
+    let mtc_detail = match (&app.project.mtc.port, app.project.mtc.enabled) {
+        (_, false) => "Off".to_string(),
+        (None, true) => "No port".to_string(),
+        (Some(_), true) if connected => "Sending".to_string(),
+        (Some(_), true) => "Port error".to_string(),
+    };
+    let hover = mtc.error.lock().unwrap().clone().unwrap_or_else(|| {
+        format!("MIDI Timecode — {}\nClick to toggle", app.project.mtc.port.clone().unwrap_or_else(|| "no port".into()))
+    });
+    let detail = if ui.available_width() > 260.0 { mtc_detail.as_str() } else { "" };
+    if pill(ui, "MTC", detail, mtc_on, theme::MTC).on_hover_text(hover).clicked() {
         app.project.mtc.enabled = !app.project.mtc.enabled;
         app.dirty = true;
         app.apply_project_to_engine();
     }
 
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        ui.spacing_mut().item_spacing.x = 8.0;
-        let l = app.ui.meter(METER_MASTER_L, sh.master_peak[0].take());
-        let r = app.ui.meter(METER_MASTER_R, sh.master_peak[1].take());
-        hmeter(ui, 90.0, 14.0, &[l, r]);
-        match &app.engine {
-            Some(e) => {
-                let load = sh.dsp_load.load() * 100.0;
-                let buf = sh.buffer_frames.load(Ordering::Relaxed);
-                let lat = sh.latency_ns.load(Ordering::Relaxed) as f32 / 1e6;
-                let details = format!(
-                    "{} — {}
-{} Hz · {buf} samples · output latency {lat:.1} ms · DSP load {load:.0}%",
-                    e.host_name, e.device_name, e.sample_rate
-                );
-                let color = if load > 70.0 { theme::WARN } else { theme::TEXT_DIM };
-                // Degrade gracefully on narrow windows instead of overlapping.
-                let room = ui.available_width();
-                let stats = if room > 420.0 {
-                    format!("{} Hz · {buf} smp · {lat:.1} ms · DSP {load:.0}%", e.sample_rate)
-                } else {
-                    format!("{}k · DSP {load:.0}%", e.sample_rate / 1000)
-                };
-                if room > 150.0 {
-                    ui.label(RichText::new(stats).font(theme::mono(11.0)).color(color)).on_hover_text(&details);
-                }
-                if ui.available_width() > 190.0 {
-                    ui.label(RichText::new(short(&e.device_name, 28)).color(theme::TEXT_DIM)).on_hover_text(&details);
-                }
-            }
-            None => {
-                ui.label(RichText::new("No audio device").color(theme::ERROR))
-                    .on_hover_text(app.engine_error.clone().unwrap_or_default());
-            }
-        }
-    });
-}
-
-fn short(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
+    if ui.available_width() < 80.0 {
+        return;
+    }
+    let channels = app.output_channels() as i32;
+    let ltc = &app.project.ltc;
+    let routed = ltc.enabled && ltc.channel >= 0 && ltc.channel < channels;
+    let detail = if !ltc.enabled {
+        "Off".to_string()
+    } else if routed {
+        format!("Out {}", ltc.channel + 1)
     } else {
-        format!("{}…", s.chars().take(max - 1).collect::<String>())
+        "Not routed".to_string()
+    };
+    let detail = if ui.available_width() > 170.0 { detail.as_str() } else { "" };
+    if pill(ui, "LTC", detail, routed, theme::LTC).on_hover_text("Linear timecode output — click to toggle").clicked() {
+        app.project.ltc.enabled = !app.project.ltc.enabled;
+        app.dirty = true;
+        app.apply_project_to_engine();
     }
 }
