@@ -3,6 +3,7 @@
 //! Everything in this crate is allocation-free and safe to call from a
 //! real-time audio thread.
 
+pub mod ltc;
 pub mod rate;
 pub mod timecode;
 
