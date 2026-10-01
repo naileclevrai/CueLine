@@ -59,6 +59,12 @@ pub fn draw(app: &mut CueLineApp, ui: &mut Ui) {
     let ltc_header = Rect::from_min_max(pos2(full.left(), ruler.bottom()), pos2(lanes_left, ltc.bottom()));
     let arrange = ruler.union(lanes);
 
+    if std::mem::take(&mut app.ui.zoom_to_fit) {
+        let end = app.project_end_secs().max(10.0);
+        let margin = end * 0.04;
+        app.view.px_per_sec = (lanes.width() / (end + 2.0 * margin) as f32).clamp(MIN_PPS, MAX_PPS);
+        app.view.scroll_secs = -margin;
+    }
     handle_wheel(app, ui, arrange, lanes);
     let playhead = app.position_secs();
     follow_playhead(app, lanes, playhead);

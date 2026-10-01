@@ -312,6 +312,10 @@ impl CueLineApp {
         }
         if changed {
             self.push_tracks();
+            if self.ui.zoom_to_fit_after_load && self.tracks.iter().all(|t| t.state != TrackState::Loading) {
+                self.ui.zoom_to_fit_after_load = false;
+                self.ui.zoom_to_fit = true;
+            }
         }
         if let Some(e) = &mut self.engine {
             e.collect_garbage();
@@ -590,6 +594,7 @@ impl CueLineApp {
                 self.settings.push_recent(path.to_path_buf());
                 self.settings.save();
                 self.apply_project_to_engine();
+                self.ui.zoom_to_fit_after_load = true;
             }
             Err(e) => self.ui.toast_error(e),
         }
