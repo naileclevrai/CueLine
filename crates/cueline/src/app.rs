@@ -525,6 +525,7 @@ impl CueLineApp {
             return;
         }
         let pos = self.secs_to_samples(self.cursor_secs);
+        log::debug!("play from {:.3}s", self.cursor_secs);
         self.ui.play_started_at = self.cursor_secs;
         self.send(Command::Seek(pos));
         self.send(Command::Play);
