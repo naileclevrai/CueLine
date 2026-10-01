@@ -2,14 +2,18 @@
 
 pub mod bigclock;
 pub mod export_dialog;
+pub mod fonts;
 pub mod headers;
 pub mod markers;
 pub mod menus;
 pub mod prefs;
 pub mod ruler;
+pub mod sheet;
 pub mod shortcuts;
+pub mod statusbar;
 pub mod theme;
 pub mod timeline;
+pub mod titlebar;
 pub mod transport;
 pub mod widgets;
 
@@ -138,49 +142,62 @@ fn handle_dropped_files(app: &mut CueLineApp, ctx: &egui::Context) {
 
 fn help_window(app: &mut CueLineApp, ctx: &egui::Context) {
     let mut open = app.ui.show_help;
-    egui::Window::new("Keyboard shortcuts")
-        .open(&mut open)
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .show(ctx, |ui| {
-            egui::Grid::new("help").num_columns(2).striped(true).spacing([24.0, 6.0]).show(ui, |ui| {
-                for (keys, what) in shortcuts::HELP {
-                    ui.label(egui::RichText::new(*keys).font(theme::mono(12.0)).color(theme::LTC));
-                    ui.label(*what);
-                    ui.end_row();
+    sheet::show(ctx, "Keyboard Shortcuts", &mut open, 440.0, |ui| {
+        sheet::group(ui, |ui| {
+            for (i, (keys, what)) in shortcuts::HELP.iter().enumerate() {
+                if i > 0 {
+                    sheet::row_separator(ui);
                 }
-            });
+                ui.horizontal(|ui| {
+                    ui.set_min_height(24.0);
+                    ui.label(egui::RichText::new(*what).color(theme::TEXT));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(egui::RichText::new(*keys).font(fonts::medium(12.0)).color(theme::TEXT_DIM));
+                    });
+                });
+            }
         });
+    });
     app.ui.show_help = open;
 }
 
+/// macOS-style notification banners, top right under the toolbar.
 fn draw_toasts(app: &mut CueLineApp, ctx: &egui::Context) {
     let now = Instant::now();
     app.ui.toasts.retain(|t| t.until > now);
     if app.ui.toasts.is_empty() {
         return;
     }
+    let top = titlebar::HEIGHT + transport::HEIGHT + 10.0;
     egui::Area::new(egui::Id::new("toasts"))
-        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-14.0, -14.0))
+        .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-14.0, top))
         .order(egui::Order::Foreground)
         .interactable(false)
         .show(ctx, |ui| {
             for t in app.ui.toasts.iter().rev().take(4) {
-                let color = match t.kind {
-                    ToastKind::Info => theme::ACCENT,
-                    ToastKind::Error => theme::ERROR,
+                let (color, title) = match t.kind {
+                    ToastKind::Info => (theme::BLUE, "CueLine"),
+                    ToastKind::Error => (theme::RED, "Attention"),
                 };
                 egui::Frame::new()
-                    .fill(theme::BG_HEADER)
-                    .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.7)))
-                    .corner_radius(4)
-                    .inner_margin(egui::Margin::symmetric(12, 8))
+                    .fill(egui::Color32::from_rgb(0x2e, 0x2e, 0x31))
+                    .stroke(egui::Stroke::new(0.5, egui::Color32::from_white_alpha(28)))
+                    .corner_radius(12)
+                    .shadow(egui::Shadow { offset: [0, 8], blur: 28, spread: 0, color: egui::Color32::from_black_alpha(140) })
+                    .inner_margin(egui::Margin { left: 14, right: 16, top: 10, bottom: 11 })
                     .show(ui, |ui| {
-                        ui.set_max_width(420.0);
-                        ui.label(egui::RichText::new(&t.text).color(theme::TEXT));
+                        ui.set_width(320.0);
+                        ui.horizontal(|ui| {
+                            let (r, _) = ui.allocate_exact_size(egui::vec2(8.0, 30.0), egui::Sense::hover());
+                            ui.painter().circle_filled(egui::pos2(r.center().x, r.top() + 8.0), 4.0, color);
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = 2.0;
+                                ui.label(egui::RichText::new(title).font(fonts::semibold(12.5)).color(theme::TEXT));
+                                ui.label(egui::RichText::new(&t.text).font(fonts::text(12.0)).color(theme::TEXT_DIM));
+                            });
+                        });
                     });
-                ui.add_space(6.0);
+                ui.add_space(8.0);
             }
         });
     ctx.request_repaint_after(Duration::from_millis(250));
@@ -209,38 +226,75 @@ fn drop_overlay(ctx: &egui::Context) {
     }
     let rect = ctx.content_rect();
     let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("drop")));
-    p.rect_filled(rect, 0.0, egui::Color32::from_black_alpha(160));
-    p.rect_stroke(rect.shrink(12.0), 6.0, egui::Stroke::new(2.0, theme::ACCENT), egui::StrokeKind::Inside);
+    p.rect_filled(rect, 0.0, egui::Color32::from_black_alpha(150));
+    p.rect_stroke(rect.shrink(14.0), 14.0, egui::Stroke::new(2.0, theme::BLUE), egui::StrokeKind::Inside);
+    p.text(rect.center() - egui::vec2(0.0, 12.0), egui::Align2::CENTER_CENTER, "Drop to import", fonts::semibold(20.0), theme::TEXT);
     p.text(
-        rect.center(),
+        rect.center() + egui::vec2(0.0, 14.0),
         egui::Align2::CENTER_CENTER,
-        "Drop audio files to import, or a .cueline project to open",
-        egui::FontId::proportional(18.0),
-        theme::TEXT,
+        "Audio files become tracks · a .cueline file opens the project",
+        fonts::text(13.0),
+        theme::TEXT_DIM,
     );
+}
+
+/// Paints the shared gradient behind the title bar and toolbar.
+fn chrome_background(ui: &egui::Ui) {
+    let full = ui.max_rect();
+    let rect = egui::Rect::from_min_size(full.min, egui::vec2(full.width(), titlebar::HEIGHT + transport::HEIGHT));
+    let mut mesh = egui::Mesh::default();
+    let (top, bottom) = (theme::BG_TOOLBAR_TOP, theme::BG_TOOLBAR);
+    mesh.colored_vertex(rect.left_top(), top);
+    mesh.colored_vertex(rect.right_top(), top);
+    mesh.colored_vertex(rect.right_bottom(), bottom);
+    mesh.colored_vertex(rect.left_bottom(), bottom);
+    mesh.add_triangle(0, 1, 2);
+    mesh.add_triangle(0, 2, 3);
+    let p = ui.painter();
+    p.add(egui::Shape::mesh(mesh));
+    p.hline(rect.x_range(), rect.top() + 0.5, egui::Stroke::new(1.0, egui::Color32::from_white_alpha(14)));
+    p.hline(rect.x_range(), rect.bottom() - 0.5, egui::Stroke::new(1.0, theme::HAIRLINE));
 }
 
 pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     let ctx = ui.ctx().clone();
     shortcuts::handle(app, &ctx);
     handle_dropped_files(app, &ctx);
-    egui::Panel::top("menu")
-        .frame(egui::Frame::new().fill(theme::BG_DEEP).inner_margin(egui::Margin::symmetric(6, 2)))
-        .show(ui, |ui| menus::menu_bar(app, ui));
-    egui::Panel::top("transport")
-        .exact_size(66.0)
-        .frame(egui::Frame::new().fill(theme::BG_HEADER).inner_margin(egui::Margin::symmetric(10, 6)))
+    chrome_background(ui);
+    egui::Panel::top("titlebar")
+        .exact_size(titlebar::HEIGHT)
+        .frame(egui::Frame::NONE)
+        .show_separator_line(false)
+        .show(ui, |ui| titlebar::draw(app, ui));
+    egui::Panel::top("toolbar")
+        .exact_size(transport::HEIGHT)
+        .frame(egui::Frame::NONE)
+        .show_separator_line(false)
         .show(ui, |ui| transport::draw(app, ui));
+    egui::Panel::bottom("status")
+        .exact_size(statusbar::HEIGHT)
+        .frame(egui::Frame::new().fill(theme::BG_TOOLBAR).inner_margin(egui::Margin::symmetric(10, 0)))
+        .show_separator_line(false)
+        .show(ui, |ui| {
+            let r = ui.max_rect();
+            ui.painter().hline(r.x_range(), r.top() + 0.5, egui::Stroke::new(1.0, theme::HAIRLINE));
+            statusbar::draw(app, ui)
+        });
     if app.ui.show_markers {
         egui::Panel::right("markers")
             .resizable(true)
-            .default_size(260.0)
-            .size_range(200.0..=480.0)
-            .frame(egui::Frame::new().fill(theme::BG_PANEL).inner_margin(egui::Margin::same(8)))
-            .show(ui, |ui| markers::panel(app, ui));
+            .default_size(280.0)
+            .size_range(220.0..=480.0)
+            .show_separator_line(false)
+            .frame(egui::Frame::new().fill(theme::BG_PANEL).inner_margin(egui::Margin { left: 12, right: 12, top: 12, bottom: 8 }))
+            .show(ui, |ui| {
+                let r = ui.max_rect().expand2(egui::vec2(12.0, 12.0));
+                ui.painter().vline(r.left() + 0.5, r.y_range(), egui::Stroke::new(1.0, theme::HAIRLINE));
+                markers::panel(app, ui)
+            });
     }
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(theme::BG_LANE_ALT))
+        .frame(egui::Frame::new().fill(theme::BG_CONTENT))
         .show(ui, |ui| timeline::draw(app, ui));
     prefs::window(app, &ctx);
     export_dialog::window(app, &ctx);
@@ -249,4 +303,5 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     draw_toasts(app, &ctx);
     drop_overlay(&ctx);
     window_chrome(app, &ctx);
+    titlebar::resize_edges(&ctx);
 }

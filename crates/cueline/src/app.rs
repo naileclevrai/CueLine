@@ -682,6 +682,16 @@ impl CueLineApp {
         }
     }
 
+    /// Document name and whether it has unsaved changes.
+    pub fn title_parts(&self) -> (String, bool) {
+        let name = self
+            .project_path
+            .as_ref()
+            .and_then(|p| p.file_stem())
+            .map_or("Untitled".into(), |s| s.to_string_lossy().into_owned());
+        (name, self.dirty)
+    }
+
     pub fn title(&self) -> String {
         let name = self
             .project_path
@@ -694,6 +704,9 @@ impl CueLineApp {
 
 impl eframe::App for CueLineApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        if ui.ctx().cumulative_frame_nr() == 1 {
+            crate::platform::round_window_corners();
+        }
         self.poll();
         ui::draw(self, ui);
         if let Some(mut shot) = self.devshot.take() {
