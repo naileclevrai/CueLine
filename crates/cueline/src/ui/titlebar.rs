@@ -31,7 +31,13 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     let center = rect.center();
     if title.1 {
         p.text(pos2(center.x - name_w / 2.0, center.y), Align2::LEFT_CENTER, &title.0, name_font, theme::TEXT);
-        p.text(pos2(center.x + name_w / 2.0 + 6.0, center.y), Align2::LEFT_CENTER, "— Edited", fonts::text(13.0), theme::TEXT_FAINT);
+        p.text(
+            pos2(center.x + name_w / 2.0 + 6.0, center.y),
+            Align2::LEFT_CENTER,
+            "— Edited",
+            fonts::text(13.0),
+            theme::TEXT_FAINT,
+        );
     } else {
         p.text(center, Align2::CENTER_CENTER, &title.0, name_font, theme::TEXT);
     }

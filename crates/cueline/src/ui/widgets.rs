@@ -13,9 +13,7 @@ use super::{fonts, theme};
 
 /// Width of the widest digit, so numbers never jitter while they change.
 fn digit_width(p: &Painter, font: &FontId) -> f32 {
-    (0..10)
-        .map(|d| p.layout_no_wrap(d.to_string(), font.clone(), Color32::WHITE).size().x)
-        .fold(0.0, f32::max)
+    (0..10).map(|d| p.layout_no_wrap(d.to_string(), font.clone(), Color32::WHITE).size().x).fold(0.0, f32::max)
 }
 
 /// Measures `text` drawn with tabular digits.
@@ -74,7 +72,8 @@ pub fn traffic_lights(ui: &mut Ui) -> Option<WindowAction> {
         let r = Rect::from_center_size(c, vec2(12.0, 12.0));
         let resp = ui.interact(r, ui.id().with(("traffic", i)), Sense::click());
         let p = ui.painter();
-        let (fill, edge) = if focused || group_hovered { (fill, edge) } else { (theme::BG_WIDGET_HOVER, theme::BG_WIDGET) };
+        let (fill, edge) =
+            if focused || group_hovered { (fill, edge) } else { (theme::BG_WIDGET_HOVER, theme::BG_WIDGET) };
         let fill = if resp.is_pointer_button_down_on() { theme::mix(fill, Color32::BLACK, 0.25) } else { fill };
         p.circle_filled(c, 6.0, fill);
         p.circle_stroke(c, 5.75, Stroke::new(0.5, edge));
@@ -89,8 +88,16 @@ pub fn traffic_lights(ui: &mut Ui) -> Option<WindowAction> {
                     p.line_segment([c + vec2(-3.0, 0.0), c + vec2(3.0, 0.0)], Stroke::new(1.3, g));
                 }
                 WindowAction::Zoom => {
-                    p.add(Shape::convex_polygon(vec![c + vec2(-3.0, -3.0), c + vec2(1.5, -3.0), c + vec2(-3.0, 1.5)], g, Stroke::NONE));
-                    p.add(Shape::convex_polygon(vec![c + vec2(3.0, 3.0), c + vec2(-1.5, 3.0), c + vec2(3.0, -1.5)], g, Stroke::NONE));
+                    p.add(Shape::convex_polygon(
+                        vec![c + vec2(-3.0, -3.0), c + vec2(1.5, -3.0), c + vec2(-3.0, 1.5)],
+                        g,
+                        Stroke::NONE,
+                    ));
+                    p.add(Shape::convex_polygon(
+                        vec![c + vec2(3.0, 3.0), c + vec2(-1.5, 3.0), c + vec2(3.0, -1.5)],
+                        g,
+                        Stroke::NONE,
+                    ));
                 }
             }
         }
@@ -115,7 +122,6 @@ pub enum Icon {
     Sidebar,
     Plus,
     Clock,
-    Waveform,
 }
 
 pub fn paint_icon(p: &Painter, icon: Icon, c: Pos2, s: f32, color: Color32) {
@@ -139,11 +145,19 @@ pub fn paint_icon(p: &Painter, icon: Icon, c: Pos2, s: f32, color: Color32) {
         }
         Icon::ToStart | Icon::ToEnd => {
             let d = if icon == Icon::ToStart { -1.0 } else { 1.0 };
-            p.rect_filled(Rect::from_center_size(c + vec2(d * s * 0.5, 0.0), vec2(s * 0.16, s * 1.0)), CornerRadius::same(1), color);
+            p.rect_filled(
+                Rect::from_center_size(c + vec2(d * s * 0.5, 0.0), vec2(s * 0.16, s * 1.0)),
+                CornerRadius::same(1),
+                color,
+            );
             for k in [0.0, 1.0] {
                 let tip = c + vec2(d * (s * 0.38 - k * s * 0.5), 0.0);
                 let back = tip.x - d * s * 0.5;
-                p.add(Shape::convex_polygon(vec![tip, pos2(back, c.y - s * 0.45), pos2(back, c.y + s * 0.45)], color, Stroke::NONE));
+                p.add(Shape::convex_polygon(
+                    vec![tip, pos2(back, c.y - s * 0.45), pos2(back, c.y + s * 0.45)],
+                    color,
+                    Stroke::NONE,
+                ));
             }
         }
         Icon::Follow => {
@@ -180,12 +194,6 @@ pub fn paint_icon(p: &Painter, icon: Icon, c: Pos2, s: f32, color: Color32) {
             p.circle_stroke(c, s * 0.6, stroke);
             p.line_segment([c, c + vec2(0.0, -s * 0.38)], stroke);
             p.line_segment([c, c + vec2(s * 0.28, s * 0.12)], stroke);
-        }
-        Icon::Waveform => {
-            for (i, h) in [0.3, 0.7, 1.0, 0.55, 0.85, 0.4].iter().enumerate() {
-                let x = c.x - s * 0.62 + i as f32 * s * 0.25;
-                p.line_segment([pos2(x, c.y - h * s * 0.55), pos2(x, c.y + h * s * 0.55)], stroke);
-            }
         }
     }
 }
@@ -266,7 +274,13 @@ pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T,
         } else if resp.hovered() {
             p.rect_filled(r, CornerRadius::same(5), Color32::from_white_alpha(8));
         }
-        p.text(r.center(), Align2::CENTER_CENTER, *label, font.clone(), if selected { theme::TEXT } else { theme::TEXT_DIM });
+        p.text(
+            r.center(),
+            Align2::CENTER_CENTER,
+            *label,
+            font.clone(),
+            if selected { theme::TEXT } else { theme::TEXT_DIM },
+        );
         if resp.clicked() && !selected {
             *value = *v;
             changed = true;
@@ -320,7 +334,11 @@ pub fn fader(ui: &mut Ui, db: &mut f32, width: f32, color: Color32) -> Response 
     let p = ui.painter();
     p.rect_filled(track, CornerRadius::same(2), Color32::from_rgb(0x18, 0x18, 0x1a));
     let x = track.left() + to_pos(*db) * track.width();
-    p.rect_filled(Rect::from_min_max(track.left_top(), pos2(x, track.bottom())), CornerRadius::same(2), color.gamma_multiply(0.75));
+    p.rect_filled(
+        Rect::from_min_max(track.left_top(), pos2(x, track.bottom())),
+        CornerRadius::same(2),
+        color.gamma_multiply(0.75),
+    );
     let unity = track.left() + to_pos(0.0) * track.width();
     p.vline(unity, (track.top() - 3.0)..=(track.bottom() + 3.0), Stroke::new(1.0, theme::TEXT_FAINT));
     let knob = Rect::from_center_size(pos2(x, rect.center().y), vec2(10.0, 14.0));
@@ -351,10 +369,12 @@ pub fn knob(ui: &mut Ui, value: &mut f32, color: Color32) -> Response {
     let start = std::f32::consts::PI * 0.75;
     let sweep = std::f32::consts::PI * 1.5;
     let arc = |a0: f32, a1: f32| -> Vec<Pos2> {
-        (0..=16).map(|i| {
-            let a = a0 + (a1 - a0) * i as f32 / 16.0;
-            c + vec2(a.cos(), a.sin()) * (r + 1.5)
-        }).collect()
+        (0..=16)
+            .map(|i| {
+                let a = a0 + (a1 - a0) * i as f32 / 16.0;
+                c + vec2(a.cos(), a.sin()) * (r + 1.5)
+            })
+            .collect()
     };
     p.add(Shape::line(arc(start, start + sweep), Stroke::new(2.0, Color32::from_rgb(0x18, 0x18, 0x1a))));
     let mid = start + sweep * 0.5;
@@ -362,8 +382,15 @@ pub fn knob(ui: &mut Ui, value: &mut f32, color: Color32) -> Response {
     if value.abs() > 0.005 {
         p.add(Shape::line(arc(mid.min(at), mid.max(at)), Stroke::new(2.0, color)));
     }
-    p.circle_filled(c, r - 2.0, if resp.hovered() { Color32::from_rgb(0x58, 0x58, 0x5c) } else { Color32::from_rgb(0x4a, 0x4a, 0x4e) });
-    p.line_segment([c + vec2(at.cos(), at.sin()) * 2.0, c + vec2(at.cos(), at.sin()) * (r - 2.5)], Stroke::new(1.6, theme::TEXT));
+    p.circle_filled(
+        c,
+        r - 2.0,
+        if resp.hovered() { Color32::from_rgb(0x58, 0x58, 0x5c) } else { Color32::from_rgb(0x4a, 0x4a, 0x4e) },
+    );
+    p.line_segment(
+        [c + vec2(at.cos(), at.sin()) * 2.0, c + vec2(at.cos(), at.sin()) * (r - 2.5)],
+        Stroke::new(1.6, theme::TEXT),
+    );
     let label = match (*value * 100.0).round() as i32 {
         0 => "Center".to_string(),
         v if v < 0 => format!("{} L", -v),
@@ -420,18 +447,17 @@ pub fn paint_vmeter(p: &Painter, rect: Rect, levels: &[f32]) {
     }
 }
 
-pub fn hmeter(ui: &mut Ui, width: f32, height: f32, levels: &[f32]) {
-    let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
-    paint_hmeter(ui.painter(), rect, levels);
-}
-
 /// Toolbar status capsule with a coloured dot, e.g. "● LTC  Out 2".
 pub fn pill(ui: &mut Ui, label: &str, detail: &str, on: bool, color: Color32) -> Response {
     let font = fonts::semibold(11.5);
     let dfont = fonts::text(11.5);
     let p = ui.painter();
     let lw = p.layout_no_wrap(label.into(), font.clone(), Color32::WHITE).size().x;
-    let dw = if detail.is_empty() { 0.0 } else { p.layout_no_wrap(detail.into(), dfont.clone(), Color32::WHITE).size().x + 6.0 };
+    let dw = if detail.is_empty() {
+        0.0
+    } else {
+        p.layout_no_wrap(detail.into(), dfont.clone(), Color32::WHITE).size().x + 6.0
+    };
     let (rect, resp) = ui.allocate_exact_size(vec2(26.0 + lw + dw + 10.0, 24.0), Sense::click());
     let p = ui.painter();
     let fill = if resp.hovered() { theme::BG_WIDGET_HOVER } else { theme::BG_WIDGET };
@@ -441,7 +467,13 @@ pub fn pill(ui: &mut Ui, label: &str, detail: &str, on: bool, color: Color32) ->
         p.circle_filled(dot, 6.5, color.gamma_multiply(0.25));
     }
     p.circle_filled(dot, 3.5, if on { color } else { theme::TEXT_FAINT });
-    p.text(pos2(rect.left() + 24.0, rect.center().y), Align2::LEFT_CENTER, label, font, if on { theme::TEXT } else { theme::TEXT_DIM });
+    p.text(
+        pos2(rect.left() + 24.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        font,
+        if on { theme::TEXT } else { theme::TEXT_DIM },
+    );
     if !detail.is_empty() {
         p.text(pos2(rect.left() + 30.0 + lw, rect.center().y), Align2::LEFT_CENTER, detail, dfont, theme::TEXT_DIM);
     }

@@ -23,9 +23,7 @@ pub const LCD: Color32 = Color32::from_rgb(0x10, 0x11, 0x13);
 // Lines.
 pub const SEPARATOR: Color32 = Color32::from_rgb(0x38, 0x38, 0x3b);
 pub const HAIRLINE: Color32 = Color32::from_rgb(0x0b, 0x0b, 0x0c);
-pub const BORDER: Color32 = Color32::from_rgb(0x44, 0x44, 0x48);
 pub const GRID: Color32 = Color32::from_rgb(0x28, 0x28, 0x2b);
-pub const GRID_STRONG: Color32 = Color32::from_rgb(0x33, 0x33, 0x37);
 
 // Label hierarchy (Apple: label / secondary / tertiary / quaternary).
 pub const TEXT: Color32 = Color32::from_rgb(0xf2, 0xf2, 0xf7);
@@ -40,16 +38,11 @@ pub const ORANGE: Color32 = Color32::from_rgb(0xff, 0x9f, 0x0a);
 pub const RED: Color32 = Color32::from_rgb(0xff, 0x45, 0x3a);
 pub const YELLOW: Color32 = Color32::from_rgb(0xff, 0xd6, 0x0a);
 pub const PURPLE: Color32 = Color32::from_rgb(0xbf, 0x5a, 0xf2);
-pub const TEAL: Color32 = Color32::from_rgb(0x40, 0xc8, 0xe0);
 
 // Semantic aliases.
-pub const ACCENT: Color32 = BLUE;
 pub const PLAYHEAD: Color32 = Color32::from_rgb(0xf5, 0xf5, 0xf7);
-pub const PLAYING: Color32 = GREEN;
 pub const LTC: Color32 = ORANGE;
 pub const MTC: Color32 = PURPLE;
-pub const WARN: Color32 = YELLOW;
-pub const ERROR: Color32 = RED;
 pub const MUTE: Color32 = Color32::from_rgb(0x5a, 0xa9, 0xff);
 pub const SOLO: Color32 = YELLOW;
 
@@ -73,11 +66,6 @@ pub fn rgb(c: [u8; 3]) -> Color32 {
 pub fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
     let l = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
     Color32::from_rgba_unmultiplied(l(a.r(), b.r()), l(a.g(), b.g()), l(a.b(), b.b()), l(a.a(), b.a()))
-}
-
-/// Kept for call sites that want fixed-width digits in small labels.
-pub fn mono(size: f32) -> egui::FontId {
-    fonts::mono(size)
 }
 
 pub fn apply(ctx: &egui::Context) {

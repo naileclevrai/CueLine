@@ -12,7 +12,8 @@ pub const HEIGHT: f32 = 26.0;
 
 fn item(ui: &mut egui::Ui, dot: Option<egui::Color32>, text: &str, color: egui::Color32) -> egui::Response {
     let font = fonts::text(11.5);
-    let w = ui.painter().layout_no_wrap(text.to_string(), font.clone(), color).size().x + if dot.is_some() { 14.0 } else { 0.0 };
+    let w = ui.painter().layout_no_wrap(text.to_string(), font.clone(), color).size().x
+        + if dot.is_some() { 14.0 } else { 0.0 };
     let (rect, resp) = ui.allocate_exact_size(vec2(w, HEIGHT), Sense::hover());
     let p = ui.painter();
     let mut x = rect.left();
@@ -39,7 +40,12 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
         let ltc = &app.project.ltc;
         let routed = ltc.enabled && ltc.channel >= 0 && ltc.channel < channels;
         let ltc_text = if routed {
-            format!("LTC  {} fps  →  Out {}  ·  {:.1} dBFS", app.project.frame_rate.label(), ltc.channel + 1, ltc.level_db)
+            format!(
+                "LTC  {} fps  →  Out {}  ·  {:.1} dBFS",
+                app.project.frame_rate.label(),
+                ltc.channel + 1,
+                ltc.level_db
+            )
         } else if ltc.enabled {
             "LTC not routed — choose an output".to_string()
         } else {
@@ -79,7 +85,12 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
                     divider(ui);
                     let buf = sh.buffer_frames.load(Ordering::Relaxed);
                     let lat = sh.latency_ns.load(Ordering::Relaxed) as f32 / 1e6;
-                    item(ui, None, &format!("{:.1} kHz  ·  {buf} samples  ·  {lat:.1} ms", e.sample_rate as f32 / 1000.0), theme::TEXT_DIM);
+                    item(
+                        ui,
+                        None,
+                        &format!("{:.1} kHz  ·  {buf} samples  ·  {lat:.1} ms", e.sample_rate as f32 / 1000.0),
+                        theme::TEXT_DIM,
+                    );
                     divider(ui);
                     if ui.available_width() > 120.0 {
                         item(ui, Some(theme::GREEN), &format!("{} · {}", e.host_name, e.device_name), theme::TEXT_DIM);

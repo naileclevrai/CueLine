@@ -15,23 +15,22 @@ pub const TEXT_MEDIUM: &str = "sf-text-medium";
 pub const TEXT_SEMIBOLD: &str = "sf-text-semibold";
 pub const DISPLAY: &str = "sf-display";
 pub const DISPLAY_LIGHT: &str = "sf-display-light";
-pub const DISPLAY_MEDIUM: &str = "sf-display-medium";
 pub const MONO: &str = "mono";
 
 const INTER_REGULAR: &[u8] = include_bytes!("../../../../assets/fonts/Inter-Regular.ttf");
 const INTER_MEDIUM: &[u8] = include_bytes!("../../../../assets/fonts/Inter-Medium.ttf");
 const INTER_SEMIBOLD: &[u8] = include_bytes!("../../../../assets/fonts/Inter-SemiBold.ttf");
 const INTER_DISPLAY_LIGHT: &[u8] = include_bytes!("../../../../assets/fonts/InterDisplay-Light.ttf");
-const INTER_DISPLAY_MEDIUM: &[u8] = include_bytes!("../../../../assets/fonts/InterDisplay-Medium.ttf");
 
 /// (family, system font files in order of preference, embedded fallback)
-const FACES: &[(&str, &[&str], Option<&[u8]>)] = &[
+type Face = (&'static str, &'static [&'static str], Option<&'static [u8]>);
+
+const FACES: &[Face] = &[
     (TEXT, &["SF-Pro-Text-Regular.otf", "SF-Pro-Display-Regular.otf"], Some(INTER_REGULAR)),
     (TEXT_MEDIUM, &["SF-Pro-Text-Medium.otf", "SF-Pro-Display-Medium.otf"], Some(INTER_MEDIUM)),
     (TEXT_SEMIBOLD, &["SF-Pro-Text-Semibold.otf", "SF-Pro-Display-Semibold.otf"], Some(INTER_SEMIBOLD)),
     (DISPLAY, &["SF-Pro-Display-Regular.otf", "SF-Pro-Text-Regular.otf"], Some(INTER_REGULAR)),
     (DISPLAY_LIGHT, &["SF-Pro-Display-Light.otf", "SF-Pro-Display-Thin.otf"], Some(INTER_DISPLAY_LIGHT)),
-    (DISPLAY_MEDIUM, &["SF-Pro-Display-Medium.otf", "SF-Pro-Display-Semibold.otf"], Some(INTER_DISPLAY_MEDIUM)),
     (MONO, &["SF-Mono-Regular.otf", "SFMono-Regular.otf", "CascadiaMono.ttf", "consola.ttf"], None),
 ];
 
@@ -52,9 +51,7 @@ fn font_dirs() -> Vec<PathBuf> {
 }
 
 fn find(names: &[&str], dirs: &[PathBuf]) -> Option<(String, Vec<u8>)> {
-    names.iter().find_map(|n| {
-        dirs.iter().find_map(|d| std::fs::read(d.join(n)).ok().map(|b| (n.to_string(), b)))
-    })
+    names.iter().find_map(|n| dirs.iter().find_map(|d| std::fs::read(d.join(n)).ok().map(|b| (n.to_string(), b))))
 }
 
 /// Installs the fonts and returns whether San Francisco was found.
@@ -108,9 +105,6 @@ pub fn display(size: f32) -> FontId {
 }
 pub fn display_light(size: f32) -> FontId {
     FontId::new(size, family(DISPLAY_LIGHT))
-}
-pub fn display_medium(size: f32) -> FontId {
-    FontId::new(size, family(DISPLAY_MEDIUM))
 }
 pub fn mono(size: f32) -> FontId {
     FontId::new(size, family(MONO))

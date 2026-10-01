@@ -53,7 +53,10 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
         });
         ui.add_space(6.0);
         let follow = app.settings.follow_playhead;
-        if tool_button(ui, Icon::Follow, follow, theme::BLUE, vec2(32.0, 28.0)).on_hover_text("Follow playhead (F)").clicked() {
+        if tool_button(ui, Icon::Follow, follow, theme::BLUE, vec2(32.0, 28.0))
+            .on_hover_text("Follow playhead (F)")
+            .clicked()
+        {
             app.settings.follow_playhead = !follow;
         }
     });
@@ -61,8 +64,8 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     // Right side, laid out from the right edge.
     let right = Rect::from_min_max(pos2(lcd.right() + 12.0, rect.top()), pos2(rect.right() - 12.0, rect.bottom()));
     if right.width() > 40.0 {
-        let mut child =
-            ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
+        let mut child = ui
+            .new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
         io_status(app, &mut child);
     }
 }
@@ -95,7 +98,14 @@ fn lcd_display(app: &mut CueLineApp, ui: &mut egui::Ui, lcd: Rect, pos: f64, pla
     let tc = app.timecode_at(pos);
     let tc_pos = pos2(tc_area.left() + 30.0, value_y);
     if app.ui.goto_text.is_none() {
-        tabular(&p, tc_pos, Align2::LEFT_CENTER, &tc.display(rate).to_string(), fonts::display_light(25.0), theme::TEXT);
+        tabular(
+            &p,
+            tc_pos,
+            Align2::LEFT_CENTER,
+            &tc.display(rate).to_string(),
+            fonts::display_light(25.0),
+            theme::TEXT,
+        );
     }
     let caption = if rate.is_drop() {
         format!("TIMECODE  ·  {} DF", rate.label())
@@ -131,7 +141,14 @@ fn lcd_display(app: &mut CueLineApp, ui: &mut egui::Ui, lcd: Rect, pos: f64, pla
             let s = left - m * 60.0;
             let soon = left < 5.0 && playing;
             let color = if soon { theme::ORANGE } else { theme::TEXT };
-            tabular(&p, pos2(nx, value_y), Align2::LEFT_CENTER, &format!("−{m:02}:{s:04.1}"), fonts::display(16.0), color);
+            tabular(
+                &p,
+                pos2(nx, value_y),
+                Align2::LEFT_CENTER,
+                &format!("−{m:02}:{s:04.1}"),
+                fonts::display(16.0),
+                color,
+            );
             let name = if mk.name.is_empty() { format!("Marker {}", i + 1) } else { mk.name.clone() };
             let dot = pos2(nx + 3.0, caption_y);
             p.circle_filled(dot, 3.0, theme::rgb(mk.color));
@@ -140,7 +157,14 @@ fn lcd_display(app: &mut CueLineApp, ui: &mut egui::Ui, lcd: Rect, pos: f64, pla
             p.with_clip_rect(clip).galley(pos2(nx + 10.0, caption_y - galley.size().y / 2.0), galley, theme::TEXT_DIM);
         }
         None => {
-            tabular(&p, pos2(nx, value_y), Align2::LEFT_CENTER, "−−:−−.−", fonts::display(16.0), theme::TEXT_QUATERNARY);
+            tabular(
+                &p,
+                pos2(nx, value_y),
+                Align2::LEFT_CENTER,
+                "−−:−−.−",
+                fonts::display(16.0),
+                theme::TEXT_QUATERNARY,
+            );
             p.text(pos2(nx + 1.0, caption_y), Align2::LEFT_CENTER, "NEXT CUE", label_font, theme::TEXT_FAINT);
         }
     }
@@ -234,7 +258,8 @@ fn io_status(app: &mut CueLineApp, ui: &mut egui::Ui) {
         "Not routed".to_string()
     };
     let detail = if ui.available_width() > 170.0 { detail.as_str() } else { "" };
-    if pill(ui, "LTC", detail, routed, theme::LTC).on_hover_text("Linear timecode output — click to toggle").clicked() {
+    if pill(ui, "LTC", detail, routed, theme::LTC).on_hover_text("Linear timecode output — click to toggle").clicked()
+    {
         app.project.ltc.enabled = !app.project.ltc.enabled;
         app.dirty = true;
         app.apply_project_to_engine();

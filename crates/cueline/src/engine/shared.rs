@@ -95,7 +95,9 @@ impl EngineShared {
             buffer_frames: AtomicU32::new(0),
             latency_ns: AtomicU32::new(0),
             stream_error: AtomicBool::new(false),
-            silent_output: AtomicBool::new(std::env::var_os("CUELINE_SCREENSHOT").is_some() || std::env::var_os("CUELINE_SILENT").is_some()),
+            silent_output: AtomicBool::new(
+                std::env::var_os("CUELINE_SCREENSHOT").is_some() || std::env::var_os("CUELINE_SILENT").is_some(),
+            ),
             clock: SharedClock::default(),
         })
     }

@@ -183,7 +183,12 @@ fn draw_toasts(app: &mut CueLineApp, ctx: &egui::Context) {
                     .fill(egui::Color32::from_rgb(0x2e, 0x2e, 0x31))
                     .stroke(egui::Stroke::new(0.5, egui::Color32::from_white_alpha(28)))
                     .corner_radius(12)
-                    .shadow(egui::Shadow { offset: [0, 8], blur: 28, spread: 0, color: egui::Color32::from_black_alpha(140) })
+                    .shadow(egui::Shadow {
+                        offset: [0, 8],
+                        blur: 28,
+                        spread: 0,
+                        color: egui::Color32::from_black_alpha(140),
+                    })
                     .inner_margin(egui::Margin { left: 14, right: 16, top: 10, bottom: 11 })
                     .show(ui, |ui| {
                         ui.set_width(320.0);
@@ -228,7 +233,13 @@ fn drop_overlay(ctx: &egui::Context) {
     let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("drop")));
     p.rect_filled(rect, 0.0, egui::Color32::from_black_alpha(150));
     p.rect_stroke(rect.shrink(14.0), 14.0, egui::Stroke::new(2.0, theme::BLUE), egui::StrokeKind::Inside);
-    p.text(rect.center() - egui::vec2(0.0, 12.0), egui::Align2::CENTER_CENTER, "Drop to import", fonts::semibold(20.0), theme::TEXT);
+    p.text(
+        rect.center() - egui::vec2(0.0, 12.0),
+        egui::Align2::CENTER_CENTER,
+        "Drop to import",
+        fonts::semibold(20.0),
+        theme::TEXT,
+    );
     p.text(
         rect.center() + egui::vec2(0.0, 14.0),
         egui::Align2::CENTER_CENTER,
@@ -286,7 +297,12 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
             .default_size(280.0)
             .size_range(220.0..=480.0)
             .show_separator_line(false)
-            .frame(egui::Frame::new().fill(theme::BG_PANEL).inner_margin(egui::Margin { left: 12, right: 12, top: 12, bottom: 8 }))
+            .frame(egui::Frame::new().fill(theme::BG_PANEL).inner_margin(egui::Margin {
+                left: 12,
+                right: 12,
+                top: 12,
+                bottom: 8,
+            }))
             .show(ui, |ui| {
                 let r = ui.max_rect().expand2(egui::vec2(12.0, 12.0));
                 ui.painter().vline(r.left() + 0.5, r.y_range(), egui::Stroke::new(1.0, theme::HAIRLINE));

@@ -8,7 +8,13 @@ const SHEET_FILL: Color32 = Color32::from_rgb(0x26, 0x26, 0x29);
 const GROUP_FILL: Color32 = Color32::from_rgb(0x30, 0x30, 0x33);
 
 /// Shows a modal sheet. Clicking outside or pressing Escape closes it.
-pub fn show<R>(ctx: &egui::Context, title: &str, open: &mut bool, width: f32, add: impl FnOnce(&mut Ui) -> R) -> Option<R> {
+pub fn show<R>(
+    ctx: &egui::Context,
+    title: &str,
+    open: &mut bool,
+    width: f32,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> Option<R> {
     if !*open {
         return None;
     }
@@ -26,7 +32,8 @@ pub fn show<R>(ctx: &egui::Context, title: &str, open: &mut bool, width: f32, ad
             // Header: close light on the left, centred title.
             let (header, _) = ui.allocate_exact_size(vec2(width, 44.0), Sense::hover());
             let c = pos2(header.left() + 6.0, header.center().y);
-            let close = ui.interact(egui::Rect::from_center_size(c, vec2(14.0, 14.0)), ui.id().with("close"), Sense::click());
+            let close =
+                ui.interact(egui::Rect::from_center_size(c, vec2(14.0, 14.0)), ui.id().with("close"), Sense::click());
             let p = ui.painter();
             p.circle_filled(c, 6.0, Color32::from_rgb(0xff, 0x5f, 0x57));
             if close.hovered() {
