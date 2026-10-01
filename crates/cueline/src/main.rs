@@ -4,6 +4,7 @@ mod app;
 mod audio;
 mod engine;
 mod export;
+mod history;
 mod platform;
 mod project;
 mod settings;

@@ -15,7 +15,8 @@ use crate::engine::clock::now_ns;
 use crate::engine::device::AudioEngine;
 use crate::engine::mtc_out::MtcOutput;
 use crate::engine::shared::{ClipData, Command, EngineShared, RtTrack, TrackParams};
-use crate::project::{Project, TrackDef};
+use crate::history::{History, Snapshot};
+use crate::project::{Marker, Project, TrackDef};
 use crate::settings::Settings;
 use crate::ui;
 
@@ -42,6 +43,7 @@ pub enum TrackState {
     Failed(String),
 }
 
+#[derive(Clone)]
 pub struct Track {
     pub id: u64,
     pub def: TrackDef,
@@ -75,13 +77,31 @@ pub struct ViewState {
     /// Timeline time at the left edge of the arrange view.
     pub scroll_secs: f64,
     pub track_height: f32,
+    /// Vertical scroll of the track lanes, in pixels.
+    pub scroll_y: f32,
     pub selected_track: Option<u64>,
     pub selected_marker: Option<usize>,
+    pub drag: Option<ui::timeline::Drag>,
+    pub context_track: Option<u64>,
+    pub context_marker: Option<usize>,
+    /// Timeline time where the last context menu was opened.
+    pub context_time: f64,
 }
 
 impl Default for ViewState {
     fn default() -> Self {
-        Self { px_per_sec: 40.0, scroll_secs: -1.0, track_height: 76.0, selected_track: None, selected_marker: None }
+        Self {
+            px_per_sec: 40.0,
+            scroll_secs: -1.0,
+            track_height: 76.0,
+            scroll_y: 0.0,
+            selected_track: None,
+            selected_marker: None,
+            drag: None,
+            context_track: None,
+            context_marker: None,
+            context_time: 0.0,
+        }
     }
 }
 
@@ -103,6 +123,7 @@ pub struct CueLineApp {
     /// Edit cursor: where playback starts, in seconds from project start.
     pub cursor_secs: f64,
     pub ui: ui::UiState,
+    pub history: History,
 }
 
 impl CueLineApp {
@@ -127,6 +148,7 @@ impl CueLineApp {
             view: ViewState::default(),
             cursor_secs: 0.0,
             ui: ui::UiState::default(),
+            history: History::default(),
         };
         app.restart_audio();
         app.apply_project_to_engine();
@@ -339,6 +361,10 @@ impl CueLineApp {
     }
 
     pub fn import_files(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+        self.checkpoint();
         let at = self.cursor_secs.max(0.0);
         for path in paths {
             let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -349,6 +375,7 @@ impl CueLineApp {
     }
 
     pub fn remove_track(&mut self, id: u64) {
+        self.checkpoint();
         self.tracks.retain(|t| t.id != id);
         if self.view.selected_track == Some(id) {
             self.view.selected_track = None;
@@ -362,6 +389,108 @@ impl CueLineApp {
         let clips = self.tracks.iter().map(Track::end_secs).fold(0.0, f64::max);
         let markers = self.project.markers.iter().map(|m| m.time_secs).fold(0.0, f64::max);
         clips.max(markers)
+    }
+
+    // ----- markers ------------------------------------------------------
+
+    pub fn add_marker_at(&mut self, secs: f64) {
+        self.checkpoint();
+        let n = self.project.markers.len() + 1;
+        let secs = ui::timeline::snap_to_frame(secs.max(0.0), self.project.frame_rate);
+        self.project.markers.push(Marker { name: format!("Cue {n}"), time_secs: secs, ..Default::default() });
+        self.sort_markers();
+        self.view.selected_marker = self.project.markers.iter().position(|m| m.time_secs == secs);
+        self.dirty = true;
+    }
+
+    pub fn remove_marker(&mut self, idx: usize) {
+        if idx < self.project.markers.len() {
+            self.checkpoint();
+            self.project.markers.remove(idx);
+            self.view.selected_marker = None;
+            self.dirty = true;
+        }
+    }
+
+    /// Keeps markers in time order, preserving the selection.
+    pub fn sort_markers(&mut self) {
+        let selected = self.view.selected_marker.and_then(|i| self.project.markers.get(i).cloned());
+        self.project.markers.sort_by(|a, b| a.time_secs.total_cmp(&b.time_secs));
+        if let Some(sel) = selected {
+            self.view.selected_marker = self.project.markers.iter().position(|m| *m == sel);
+        }
+    }
+
+    pub fn goto_marker(&mut self, idx: usize) {
+        if let Some(m) = self.project.markers.get(idx) {
+            let t = m.time_secs;
+            self.view.selected_marker = Some(idx);
+            self.seek(t);
+        }
+    }
+
+    /// Jumps to the next (or previous) marker relative to the playhead.
+    pub fn goto_adjacent_marker(&mut self, forward: bool) {
+        let here = self.position_secs();
+        let eps = 1e-4;
+        let idx = if forward {
+            self.project.markers.iter().position(|m| m.time_secs > here + eps)
+        } else {
+            self.project.markers.iter().rposition(|m| m.time_secs < here - eps)
+        };
+        if let Some(i) = idx {
+            self.goto_marker(i);
+        }
+    }
+
+    // ----- view ---------------------------------------------------------
+
+    /// Zooms around the playhead.
+    pub fn zoom_by(&mut self, factor: f32) {
+        let v = &mut self.view;
+        let anchor = self.cursor_secs;
+        let offset = (anchor - v.scroll_secs) * v.px_per_sec as f64;
+        v.px_per_sec = (v.px_per_sec * factor).clamp(0.02, 20_000.0);
+        v.scroll_secs = anchor - offset / v.px_per_sec as f64;
+    }
+
+    // ----- undo ---------------------------------------------------------
+
+    fn snapshot(&self) -> Snapshot {
+        Snapshot { tracks: self.tracks.clone(), markers: self.project.markers.clone() }
+    }
+
+    /// Records the current state before an edit.
+    pub fn checkpoint(&mut self) {
+        let s = self.snapshot();
+        self.history.record(s);
+    }
+
+    fn restore(&mut self, s: Snapshot) {
+        self.tracks = s.tracks;
+        self.project.markers = s.markers;
+        self.view.selected_marker = None;
+        if let Some(id) = self.view.selected_track {
+            if !self.tracks.iter().any(|t| t.id == id) {
+                self.view.selected_track = None;
+            }
+        }
+        self.dirty = true;
+        self.push_tracks();
+    }
+
+    pub fn undo(&mut self) {
+        let current = self.snapshot();
+        if let Some(s) = self.history.undo(current) {
+            self.restore(s);
+        }
+    }
+
+    pub fn redo(&mut self) {
+        let current = self.snapshot();
+        if let Some(s) = self.history.redo(current) {
+            self.restore(s);
+        }
     }
 
     // ----- transport ----------------------------------------------------
@@ -435,6 +564,7 @@ impl CueLineApp {
 
     pub fn new_project(&mut self) {
         self.send(Command::Pause);
+        self.history.clear();
         self.tracks.clear();
         self.project = Project::default();
         self.project_path = None;
@@ -480,6 +610,24 @@ impl CueLineApp {
                 self.ui.toast_error(e);
                 false
             }
+        }
+    }
+
+    /// Asks whether to save unsaved changes. Returns false to abort.
+    pub fn confirm_discard(&mut self) -> bool {
+        if !self.dirty {
+            return true;
+        }
+        let answer = rfd::MessageDialog::new()
+            .set_title("CueLine")
+            .set_description("Save changes to the current project?")
+            .set_level(rfd::MessageLevel::Warning)
+            .set_buttons(rfd::MessageButtons::YesNoCancel)
+            .show();
+        match answer {
+            rfd::MessageDialogResult::Yes => ui::menus::save(self),
+            rfd::MessageDialogResult::No => true,
+            _ => false,
         }
     }
 
