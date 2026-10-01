@@ -1,5 +1,5 @@
-//! The arrange view: ruler, LTC lane, track lanes with waveforms, markers,
-//! playhead, plus all mouse interaction on them.
+//! The arrange view: marker lane, ruler, LTC lane, track lanes with
+//! waveforms, playhead, plus all mouse interaction on them.
 
 use cueline_core::FrameRate;
 use eframe::egui::{
@@ -7,14 +7,16 @@ use eframe::egui::{
 };
 
 use super::ruler::{choose_steps, Step};
-use super::theme;
+use super::widgets::tabular;
+use super::{fonts, theme};
 use crate::app::{CueLineApp, TrackState};
 
-pub const HEADER_W: f32 = 236.0;
-pub const RULER_H: f32 = 30.0;
-pub const LTC_H: f32 = 34.0;
-pub const OVERVIEW_H: f32 = 16.0;
-const CLIP_TITLE_H: f32 = 15.0;
+pub const HEADER_W: f32 = 248.0;
+pub const MARKER_H: f32 = 22.0;
+pub const RULER_H: f32 = 24.0;
+pub const LTC_H: f32 = 40.0;
+pub const OVERVIEW_H: f32 = 18.0;
+const REGION_TITLE_H: f32 = 16.0;
 const MIN_PPS: f32 = 0.02;
 const MAX_PPS: f32 = 20_000.0;
 
@@ -52,7 +54,8 @@ pub fn draw(app: &mut CueLineApp, ui: &mut Ui) {
     let full = ui.available_rect_before_wrap();
     ui.allocate_rect(full, Sense::hover());
     let lanes_left = full.left() + HEADER_W;
-    let ruler = Rect::from_min_max(pos2(lanes_left, full.top()), pos2(full.right(), full.top() + RULER_H));
+    // `ruler` covers the marker lane and the time ruler; both interact as one.
+    let ruler = Rect::from_min_max(pos2(lanes_left, full.top()), pos2(full.right(), full.top() + MARKER_H + RULER_H));
     let ltc = Rect::from_min_max(pos2(lanes_left, ruler.bottom()), pos2(full.right(), ruler.bottom() + LTC_H));
     let overview = Rect::from_min_max(pos2(lanes_left, full.bottom() - OVERVIEW_H), full.right_bottom());
     let lanes = Rect::from_min_max(pos2(lanes_left, ltc.bottom()), pos2(full.right(), overview.top()));
@@ -73,7 +76,7 @@ pub fn draw(app: &mut CueLineApp, ui: &mut Ui) {
 
     let map = Map { left: lanes_left, pps: app.view.px_per_sec, scroll: app.view.scroll_secs };
     let painter = ui.painter_at(full);
-    painter.rect_filled(full, CornerRadius::ZERO, theme::BG_LANE_ALT);
+    painter.rect_filled(full, CornerRadius::ZERO, theme::BG_CONTENT);
 
     paint_lanes(app, &painter.with_clip_rect(lanes), lanes, map);
     paint_ltc_lane(app, &painter.with_clip_rect(ltc), ltc, map);
@@ -83,28 +86,35 @@ pub fn draw(app: &mut CueLineApp, ui: &mut Ui) {
     overview_bar(app, ui, overview, lanes.width(), playhead);
     ruler_interaction(app, ui, ruler, map);
 
-    // Cursor and playhead over everything in the arrange area.
+    // Start position and playhead over everything in the arrange area.
     let p = painter.with_clip_rect(Rect::from_min_max(ruler.left_top(), lanes.right_bottom()));
-    let playing = app.is_playing();
-    if playing {
-        let x = map.x(app.ui.play_started_at);
-        p.vline(x, ltc.top()..=lanes.bottom(), Stroke::new(1.0, theme::TEXT_FAINT));
+    if app.is_playing() {
+        let x = map.x(app.ui.play_started_at).round() + 0.5;
+        p.vline(x, ruler.bottom()..=lanes.bottom(), Stroke::new(1.0, Color32::from_white_alpha(40)));
     }
     let x = map.x(playhead).round() + 0.5;
-    p.vline(x, ruler.top()..=lanes.bottom(), Stroke::new(1.0, theme::PLAYHEAD));
-    p.add(Shape::convex_polygon(
-        vec![pos2(x - 6.0, ruler.bottom() - 9.0), pos2(x + 6.0, ruler.bottom() - 9.0), pos2(x, ruler.bottom())],
-        theme::PLAYHEAD,
-        Stroke::NONE,
-    ));
+    p.vline(x + 1.0, (ruler.bottom() - 6.0)..=lanes.bottom(), Stroke::new(1.0, Color32::from_black_alpha(90)));
+    p.vline(x, (ruler.bottom() - 6.0)..=lanes.bottom(), Stroke::new(1.0, theme::PLAYHEAD));
+    let head_top = ruler.top() + MARKER_H + 3.0;
+    let head = vec![
+        pos2(x - 5.5, head_top),
+        pos2(x + 5.5, head_top),
+        pos2(x + 5.5, head_top + 8.0),
+        pos2(x, head_top + 13.0),
+        pos2(x - 5.5, head_top + 8.0),
+    ];
+    p.add(Shape::convex_polygon(head, theme::PLAYHEAD, Stroke::NONE));
 
     super::headers::corner(app, ui, corner);
     super::headers::ltc_header(app, ui, ltc_header);
     super::headers::track_headers(app, ui, headers);
 
-    painter.vline(lanes_left - 0.5, full.y_range(), Stroke::new(1.0, theme::BORDER));
-    painter.hline(full.x_range(), ruler.bottom() - 0.5, Stroke::new(1.0, theme::BORDER));
-    painter.hline(full.x_range(), ltc.bottom() - 0.5, Stroke::new(1.0, theme::BORDER));
+    let hair = Stroke::new(1.0, theme::HAIRLINE);
+    painter.vline(lanes_left - 0.5, full.y_range(), hair);
+    painter.hline(full.x_range(), ruler.top() + MARKER_H - 0.5, Stroke::new(1.0, theme::SEPARATOR));
+    painter.hline(full.x_range(), ruler.bottom() - 0.5, hair);
+    painter.hline(full.x_range(), ltc.bottom() - 0.5, hair);
+    painter.hline(overview.x_range(), overview.top() + 0.5, hair);
 }
 
 fn handle_wheel(app: &mut CueLineApp, ui: &Ui, arrange: Rect, lanes: Rect) {
@@ -162,99 +172,109 @@ fn grid_lines(app: &CueLineApp, map: Map, width: f32, step: Step) -> impl Iterat
 }
 
 fn paint_ruler(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
-    p.rect_filled(rect, CornerRadius::ZERO, theme::BG_HEADER);
+    let marker_lane = Rect::from_min_size(rect.min, vec2(rect.width(), MARKER_H));
+    let ruler = Rect::from_min_max(pos2(rect.left(), marker_lane.bottom()), rect.max);
+    p.rect_filled(marker_lane, CornerRadius::ZERO, theme::BG_PANEL);
+    p.rect_filled(ruler, CornerRadius::ZERO, theme::BG_HEADER);
+    shade_before_start(p, ruler, map);
+
     let rate = app.project.frame_rate;
-    let (major, minor) = choose_steps(map.pps, rate, 92.0);
+    let (major, minor) = choose_steps(map.pps, rate, 96.0);
     for t in grid_lines(app, map, rect.width(), minor) {
         let x = map.x(t).round() + 0.5;
-        p.vline(x, (rect.bottom() - 5.0)..=rect.bottom(), Stroke::new(1.0, theme::GRID_STRONG));
+        p.vline(x, (ruler.bottom() - 4.0)..=ruler.bottom(), Stroke::new(1.0, theme::TEXT_QUATERNARY));
     }
-    let font = theme::mono(11.0);
+    let font = fonts::text(10.5);
     for t in grid_lines(app, map, rect.width(), major) {
         let x = map.x(t).round() + 0.5;
-        p.vline(x, (rect.bottom() - 12.0)..=rect.bottom(), Stroke::new(1.0, theme::TEXT_FAINT));
-        let tc = app.timecode_at(t + 1e-6);
-        p.text(
-            pos2(x + 4.0, rect.top() + 3.0),
-            Align2::LEFT_TOP,
-            tc.display(rate).to_string(),
-            font.clone(),
-            theme::TEXT_DIM,
-        );
+        p.vline(x, (ruler.bottom() - 9.0)..=ruler.bottom(), Stroke::new(1.0, theme::TEXT_FAINT));
+        let tc = app.timecode_at(t + 1e-6).display(rate).to_string();
+        tabular(p, pos2(x + 4.0, ruler.center().y - 2.0), Align2::LEFT_CENTER, &tc, font.clone(), theme::TEXT_DIM);
     }
+
     // Project end.
     let end = app.project_end_secs();
     if end > 0.0 {
-        let x = map.x(end);
-        p.vline(x, rect.y_range(), Stroke::new(1.0, theme::TEXT_FAINT));
+        let x = map.x(end).round() + 0.5;
+        p.vline(x, ruler.y_range(), Stroke::new(1.0, theme::TEXT_FAINT));
     }
-    // Markers.
+
+    // Markers as rounded flags in their lane.
+    let flag_font = fonts::semibold(10.5);
     for (i, m) in app.project.markers.iter().enumerate() {
-        let x = map.x(m.time_secs).round() + 0.5;
+        let x = map.x(m.time_secs).round();
         let color = theme::rgb(m.color);
         let selected = app.view.selected_marker == Some(i);
-        let label = if m.name.is_empty() { format!("{}", i + 1) } else { format!("{}  {}", i + 1, m.name) };
-        let galley = p.layout_no_wrap(label, egui::FontId::proportional(11.0), Color32::BLACK);
-        let flag = Rect::from_min_size(pos2(x, rect.top() + 15.0), vec2(galley.size().x + 8.0, 14.0));
-        p.rect_filled(
-            flag,
-            CornerRadius { nw: 0, ne: 2, sw: 0, se: 2 },
-            if selected { color } else { color.gamma_multiply(0.85) },
+        let label = if m.name.is_empty() { format!("{}", i + 1) } else { format!("{}   {}", i + 1, m.name) };
+        let galley = p.layout_no_wrap(label, flag_font.clone(), Color32::BLACK);
+        let flag = Rect::from_min_size(pos2(x, marker_lane.top() + 3.0), vec2(galley.size().x + 12.0, MARKER_H - 6.0));
+        p.rect_filled(flag, CornerRadius { nw: 0, ne: 5, sw: 0, se: 5 }, color);
+        if selected {
+            p.rect_stroke(
+                flag,
+                CornerRadius { nw: 0, ne: 5, sw: 0, se: 5 },
+                Stroke::new(1.5, Color32::WHITE),
+                StrokeKind::Inside,
+            );
+        }
+        p.galley(
+            pos2(flag.left() + 6.0, flag.center().y - galley.size().y / 2.0),
+            galley,
+            Color32::from_rgb(0x14, 0x14, 0x16),
         );
-        p.galley(pos2(flag.left() + 4.0, flag.top()), galley, Color32::BLACK);
-        p.vline(x, rect.top() + 15.0..=rect.bottom(), Stroke::new(1.5, color));
+        p.vline(x + 0.5, marker_lane.top() + 3.0..=ruler.bottom(), Stroke::new(1.0, color));
     }
 }
 
 fn paint_ltc_lane(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
-    let enabled = app.project.ltc.enabled;
-    let base = if enabled { theme::LTC } else { theme::TEXT_FAINT };
     p.rect_filled(rect, CornerRadius::ZERO, theme::BG_LANE);
     shade_before_start(p, rect, map);
-    let band = rect.shrink2(vec2(0.0, 5.0));
-    let start = map.x(0.0).max(rect.left());
-    let band = Rect::from_min_max(pos2(start, band.top()), band.right_bottom());
-    if band.width() <= 0.0 {
+    let enabled = app.project.ltc.enabled;
+    let base = if enabled { theme::LTC } else { theme::TEXT_FAINT };
+    // LTC runs continuously from the project start: draw it as one long region.
+    let x0 = map.x(0.0);
+    let region = Rect::from_min_max(pos2(x0, rect.top() + 5.0), pos2(rect.right() + 8.0, rect.bottom() - 5.0));
+    if region.right() <= rect.left() || region.width() <= 0.0 {
         return;
     }
-    p.rect_filled(band, CornerRadius::ZERO, base.gamma_multiply(0.14));
+    p.rect_filled(region, CornerRadius::same(5), base.gamma_multiply(0.16));
+    p.rect_stroke(region, CornerRadius::same(5), Stroke::new(1.0, base.gamma_multiply(0.45)), StrokeKind::Inside);
+
     let rate = app.project.frame_rate;
     let px_per_frame = map.pps as f64 / rate.fps();
+    let inner = region.shrink2(vec2(0.0, 6.0));
     if px_per_frame >= 3.0 {
         let step = if px_per_frame >= 28.0 { Step::Frames(1) } else { choose_steps(map.pps, rate, 12.0).1 };
-        for t in grid_lines(app, map, rect.width(), step).filter(|t| *t >= 0.0) {
+        for t in grid_lines(app, map, rect.width(), step).filter(|t| *t > 0.0) {
             let x = map.x(t).round() + 0.5;
-            p.vline(x, band.y_range(), Stroke::new(1.0, base.gamma_multiply(0.45)));
-            if px_per_frame >= 78.0 {
-                let tc = app.timecode_at(t + 1e-6);
-                p.text(
-                    pos2(x + 4.0, band.center().y),
-                    Align2::LEFT_CENTER,
-                    tc.display(rate).to_string(),
-                    theme::mono(10.5),
-                    base.gamma_multiply(0.9),
-                );
+            p.vline(x, inner.y_range(), Stroke::new(1.0, base.gamma_multiply(0.35)));
+            if px_per_frame >= 84.0 {
+                let tc = app.timecode_at(t + 1e-6).display(rate).to_string();
+                tabular(p, pos2(x + 5.0, inner.center().y), Align2::LEFT_CENTER, &tc, fonts::text(10.5), base);
             }
         }
     } else {
-        // Zoomed out: a stylised biphase pattern hints at the signal.
-        let mut x = band.left();
+        // Zoomed out: a stylised biphase trace hints at the signal.
+        let (top, bottom) = (inner.top() + 2.0, inner.bottom() - 2.0);
+        let mut x = region.left().max(rect.left() - 10.0) + 4.0;
         let mut hi = true;
         let mut pts = Vec::new();
-        while x < band.right() {
-            let y = if hi { band.top() + 3.0 } else { band.bottom() - 3.0 };
+        let mut k = 0u32;
+        while x < rect.right() {
+            let y = if hi { top } else { bottom };
             pts.push(pos2(x, y));
-            x += if ((x as i32) / 7) % 3 == 0 { 3.0 } else { 6.0 };
-            pts.push(pos2(x.min(band.right()), y));
+            k = k.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            x += if (k >> 16).is_multiple_of(3) { 3.0 } else { 6.0 };
+            pts.push(pos2(x, y));
             hi = !hi;
         }
-        p.add(Shape::line(pts, Stroke::new(1.0, base.gamma_multiply(0.5))));
+        p.add(Shape::line(pts, Stroke::new(1.0, base.gamma_multiply(0.55))));
     }
 }
 
 fn paint_lanes(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
     let rate = app.project.frame_rate;
-    let (major, _) = choose_steps(map.pps, rate, 92.0);
+    let (major, _) = choose_steps(map.pps, rate, 96.0);
     let h = app.view.track_height;
     for (i, track) in app.tracks.iter().enumerate() {
         let top = rect.top() + i as f32 * h - app.view.scroll_y;
@@ -262,16 +282,12 @@ fn paint_lanes(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
         if !row.intersects(rect) {
             continue;
         }
-        let selected = app.view.selected_track == Some(track.id);
-        let bg = if selected {
-            theme::BG_HEADER
-        } else if i % 2 == 0 {
-            theme::BG_LANE
-        } else {
-            theme::BG_LANE_ALT
-        };
+        let bg = if i % 2 == 0 { theme::BG_LANE } else { theme::BG_LANE_ALT };
         p.rect_filled(row, CornerRadius::ZERO, bg);
-        p.hline(row.x_range(), row.bottom() - 0.5, Stroke::new(1.0, theme::BG_DEEP));
+        if app.view.selected_track == Some(track.id) {
+            p.rect_filled(row, CornerRadius::ZERO, theme::BLUE.gamma_multiply(0.07));
+        }
+        p.hline(row.x_range(), row.bottom() - 0.5, Stroke::new(1.0, theme::HAIRLINE));
     }
     shade_before_start(p, rect, map);
     for t in grid_lines(app, map, rect.width(), major) {
@@ -280,55 +296,52 @@ fn paint_lanes(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
     }
     for m in &app.project.markers {
         let x = map.x(m.time_secs).round() + 0.5;
-        p.vline(x, rect.y_range(), Stroke::new(1.0, theme::rgb(m.color).gamma_multiply(0.45)));
+        p.vline(x, rect.y_range(), Stroke::new(1.0, theme::rgb(m.color).gamma_multiply(0.35)));
     }
 
+    let title_font = fonts::medium(11.0);
     for (i, track) in app.tracks.iter().enumerate() {
         let top = rect.top() + i as f32 * h - app.view.scroll_y;
         let x0 = map.x(track.def.offset_secs);
         let dur = track.duration_secs().max(if track.state == TrackState::Loading { 2.0 } else { 0.0 });
         let x1 = map.x(track.def.offset_secs + dur);
-        let clip = Rect::from_min_max(pos2(x0, top + 3.0), pos2(x1.max(x0 + 2.0), top + h - 4.0));
-        if !clip.intersects(rect) {
+        let region = Rect::from_min_max(pos2(x0, top + 3.0), pos2(x1.max(x0 + 3.0), top + h - 3.0));
+        if !region.intersects(rect) {
             continue;
         }
-        let color = theme::rgb(track.def.color);
-        let dim = track.def.mute || matches!(track.state, TrackState::Failed(_));
-        let body = if dim { color.gamma_multiply(0.12) } else { color.gamma_multiply(0.22) };
-        p.rect_filled(clip, CornerRadius::same(2), body);
-        let title = Rect::from_min_max(clip.left_top(), pos2(clip.right(), clip.top() + CLIP_TITLE_H));
-        p.rect_filled(
-            title,
-            CornerRadius { nw: 2, ne: 2, sw: 0, se: 0 },
-            if dim { color.gamma_multiply(0.3) } else { color.gamma_multiply(0.7) },
-        );
+        let failed = matches!(track.state, TrackState::Failed(_));
+        let mut color = theme::rgb(track.def.color);
+        if track.def.mute || failed {
+            color = theme::mix(color, Color32::from_rgb(0x70, 0x70, 0x74), 0.75);
+        }
         let selected = app.view.selected_track == Some(track.id);
-        let outline = if selected {
-            Stroke::new(1.0, Color32::WHITE.gamma_multiply(0.8))
-        } else {
-            Stroke::new(1.0, color.gamma_multiply(0.5))
+        let radius = CornerRadius::same(5);
+
+        // Body and title strip.
+        p.rect_filled(region, radius, theme::mix(theme::BG_LANE, color, if selected { 0.34 } else { 0.26 }));
+        let title = Rect::from_min_max(region.left_top(), pos2(region.right(), region.top() + REGION_TITLE_H));
+        p.rect_filled(title, CornerRadius { nw: 5, ne: 5, sw: 0, se: 0 }, theme::mix(color, Color32::BLACK, 0.08));
+        let label = match &track.state {
+            TrackState::Loading => format!("{}  —  loading…", track.def.name),
+            TrackState::Failed(_) => format!("{}  —  offline", track.def.name),
+            TrackState::Ready => track.def.name.clone(),
         };
-        p.rect_stroke(clip, CornerRadius::same(2), outline, StrokeKind::Inside);
-        let name_pos = pos2(clip.left().max(rect.left()) + 5.0, title.center().y);
-        let status = match &track.state {
-            TrackState::Loading => "  (loading…)",
-            TrackState::Failed(_) => "  (offline)",
-            TrackState::Ready => "",
-        };
-        p.with_clip_rect(title.intersect(rect)).text(
-            name_pos,
+        p.with_clip_rect(title.shrink2(vec2(4.0, 0.0)).intersect(rect)).text(
+            pos2(region.left().max(rect.left()) + 7.0, title.center().y),
             Align2::LEFT_CENTER,
-            format!("{}{status}", track.def.name),
-            egui::FontId::proportional(11.0),
-            Color32::from_rgb(0x10, 0x10, 0x12),
+            label,
+            title_font.clone(),
+            Color32::from_rgb(0x12, 0x12, 0x14),
         );
 
         if let Some(peaks) = &track.peaks {
-            let wave =
-                Rect::from_min_max(pos2(clip.left(), title.bottom() + 2.0), pos2(clip.right(), clip.bottom() - 2.0));
+            let wave = Rect::from_min_max(
+                pos2(region.left(), title.bottom() + 3.0),
+                pos2(region.right(), region.bottom() - 3.0),
+            );
             let amp = wave.height() * 0.5 * crate::app::db_to_gain(track.def.gain_db).min(4.0);
             let mid = wave.center().y;
-            let wave_color = if dim { color.gamma_multiply(0.35) } else { color.gamma_multiply(1.1) };
+            let wave_color = theme::mix(color, Color32::WHITE, 0.2);
             let mut mesh = Mesh::default();
             let xa = wave.left().max(rect.left()).floor() as i32;
             let xb = wave.right().min(rect.right()).ceil() as i32;
@@ -348,46 +361,57 @@ fn paint_lanes(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
             p.hline(
                 wave.left().max(rect.left())..=wave.right().min(rect.right()),
                 mid,
-                Stroke::new(1.0, color.gamma_multiply(0.3)),
+                Stroke::new(1.0, color.gamma_multiply(0.35)),
             );
             p.add(Shape::mesh(mesh));
         }
+        let outline = if selected {
+            Stroke::new(1.5, Color32::from_white_alpha(220))
+        } else {
+            Stroke::new(1.0, Color32::from_black_alpha(90))
+        };
+        p.rect_stroke(region, radius, outline, StrokeKind::Inside);
     }
 }
 
 /// Whole-project strip with a draggable view window (acts as a scrollbar).
 fn overview_bar(app: &mut CueLineApp, ui: &mut Ui, rect: Rect, view_w: f32, playhead: f64) {
     let p = ui.painter_at(rect);
-    p.rect_filled(rect, CornerRadius::ZERO, theme::BG_DEEP);
+    p.rect_filled(rect, CornerRadius::ZERO, theme::BG_PANEL);
+    let track = rect.shrink2(vec2(8.0, 4.0));
+    p.rect_filled(track, CornerRadius::same(5), theme::BG_DEEP);
     let view_secs = (view_w / app.view.px_per_sec) as f64;
     let total = app.project_end_secs().max(app.view.scroll_secs + view_secs).max(10.0) * 1.02;
     let start = app.view.scroll_secs.min(0.0);
     let span = total - start;
-    let x_of = |t: f64| rect.left() + ((t - start) / span) as f32 * rect.width();
+    let x_of = |t: f64| track.left() + ((t - start) / span) as f32 * track.width();
 
     for t in &app.tracks {
         let a = x_of(t.def.offset_secs);
         let b = x_of(t.end_secs()).max(a + 1.0);
-        let r = Rect::from_min_max(pos2(a, rect.top() + 4.0), pos2(b, rect.bottom() - 4.0));
-        p.rect_filled(r, CornerRadius::ZERO, theme::rgb(t.def.color).gamma_multiply(0.35));
+        let r = Rect::from_min_max(pos2(a, track.top() + 3.0), pos2(b, track.bottom() - 3.0));
+        p.rect_filled(r, CornerRadius::same(2), theme::rgb(t.def.color).gamma_multiply(0.55));
     }
     for m in &app.project.markers {
-        p.vline(x_of(m.time_secs), rect.y_range(), Stroke::new(1.0, theme::rgb(m.color).gamma_multiply(0.8)));
+        p.vline(x_of(m.time_secs), track.y_range(), Stroke::new(1.0, theme::rgb(m.color)));
     }
     let win = Rect::from_min_max(
-        pos2(x_of(app.view.scroll_secs), rect.top() + 1.0),
-        pos2(x_of(app.view.scroll_secs + view_secs).max(x_of(app.view.scroll_secs) + 6.0), rect.bottom() - 1.0),
+        pos2(x_of(app.view.scroll_secs).max(track.left()), track.top()),
+        pos2(
+            x_of(app.view.scroll_secs + view_secs).min(track.right()).max(x_of(app.view.scroll_secs) + 8.0),
+            track.bottom(),
+        ),
     );
     let resp = ui.interact(rect, ui.id().with("overview"), Sense::click_and_drag());
     let active = resp.hovered() || resp.dragged();
-    p.rect_filled(win, CornerRadius::same(2), Color32::WHITE.gamma_multiply(if active { 0.14 } else { 0.08 }));
-    p.rect_stroke(win, CornerRadius::same(2), Stroke::new(1.0, theme::TEXT_FAINT), StrokeKind::Inside);
-    p.vline(x_of(playhead), rect.y_range(), Stroke::new(1.0, theme::PLAYHEAD));
+    p.rect_filled(win, CornerRadius::same(5), Color32::from_white_alpha(if active { 34 } else { 20 }));
+    p.rect_stroke(win, CornerRadius::same(5), Stroke::new(1.0, Color32::from_white_alpha(70)), StrokeKind::Inside);
+    p.vline(x_of(playhead), track.y_range(), Stroke::new(1.0, theme::PLAYHEAD));
 
     if let Some(pos) = resp.interact_pointer_pos() {
         if resp.clicked() || resp.dragged() {
             // Centre the view on the pointer.
-            let t = start + ((pos.x - rect.left()) / rect.width()) as f64 * span;
+            let t = start + ((pos.x - track.left()) / track.width()) as f64 * span;
             app.view.scroll_secs = t - view_secs / 2.0;
         }
     }
@@ -398,7 +422,7 @@ fn shade_before_start(p: &egui::Painter, rect: Rect, map: Map) {
     let x = map.x(0.0);
     if x > rect.left() {
         let r = Rect::from_min_max(rect.left_top(), pos2(x.min(rect.right()), rect.bottom()));
-        p.rect_filled(r, CornerRadius::ZERO, Color32::from_black_alpha(70));
+        p.rect_filled(r, CornerRadius::ZERO, Color32::from_black_alpha(60));
     }
 }
 
