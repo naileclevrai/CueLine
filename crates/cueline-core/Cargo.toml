@@ -1,0 +1,11 @@
+[package]
+name = "cueline-core"
+description = "Timecode primitives for CueLine: SMPTE frame rates, LTC encoding/decoding and MIDI Timecode."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
