@@ -4,5 +4,7 @@
 //! real-time audio thread.
 
 pub mod rate;
+pub mod timecode;
 
 pub use rate::FrameRate;
+pub use timecode::Timecode;
