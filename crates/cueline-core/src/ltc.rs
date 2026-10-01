@@ -218,19 +218,26 @@ pub struct LtcDecoder {
     window: u128,
     samples: u64,
     threshold: f32,
+    min_bit: f32,
+    max_bit: f32,
 }
 
 impl LtcDecoder {
     pub fn new(sample_rate: u32) -> Self {
+        // Allow +/-5% around the 23.976..30 fps range (varispeed sources).
+        let min_bit = sample_rate as f32 / (31.5 * 80.0);
+        let max_bit = sample_rate as f32 / (22.8 * 80.0);
         Self {
             sample_rate,
             high: false,
             since_edge: 0,
-            bit_period: sample_rate as f32 / (27.0 * 80.0),
+            bit_period: (min_bit + max_bit) * 0.5,
             half_pending: false,
             window: 0,
             samples: 0,
             threshold: 0.02,
+            min_bit,
+            max_bit,
         }
     }
 
@@ -250,10 +257,9 @@ impl LtcDecoder {
             let interval = self.since_edge as f32;
             self.since_edge = 0;
 
-            if interval > self.bit_period * 1.6 || interval < self.bit_period * 0.3 {
+            if interval > self.max_bit * 1.4 || interval < self.min_bit * 0.3 {
                 // Signal dropout or noise: resynchronise on the next frame.
                 self.half_pending = false;
-                self.bit_period = self.bit_period * 0.5 + interval.clamp(5.0, 100.0) * 0.25;
                 continue;
             }
             let bit = if interval > self.bit_period * 0.75 {
@@ -268,11 +274,89 @@ impl LtcDecoder {
                 self.bit_period += (interval * 2.0 - self.bit_period) * 0.1;
                 continue;
             };
+            self.bit_period = self.bit_period.clamp(self.min_bit, self.max_bit);
             self.window = (self.window >> 1) | ((bit as u128) << 79);
             let frame = LtcFrame(self.window);
             if frame.sync_ok() {
                 on_frame(DecodedFrame { frame, end_sample: self.samples - 1 });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frame_fields_roundtrip() {
+        for rate in FrameRate::ALL {
+            let tc = Timecode::new(23, 59, 58, rate.nominal() as u8 - 1);
+            let f = LtcFrame::encode(tc, rate, 0xDEAD_BEEF);
+            assert!(f.sync_ok());
+            assert_eq!(f.timecode(), tc);
+            assert_eq!(f.user_bits(), 0xDEAD_BEEF);
+            assert_eq!(f.drop_frame(), rate.is_drop());
+            assert_eq!(f.0.count_ones() % 2, 0, "polarity correction at {rate}");
+        }
+    }
+
+    #[test]
+    fn sync_word_bit_order() {
+        let f = LtcFrame::encode(Timecode::default(), FrameRate::Fps25, 0);
+        let bits: Vec<u8> = (64..80).map(|i| f.bit(i) as u8).collect();
+        assert_eq!(bits, [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1]);
+    }
+
+    fn render_and_decode(rate: FrameRate, sr: u32, start_tc: Timecode, chunk: usize) {
+        let mut gen = LtcGenerator::new(sr, rate);
+        gen.set_start_frames(start_tc.to_frames(rate));
+        let total = sr as usize * 3;
+        let mut signal = vec![0.0f32; total];
+        for (i, c) in signal.chunks_mut(chunk).enumerate() {
+            gen.render((i * chunk) as i64, c);
+        }
+        let mut dec = LtcDecoder::new(sr);
+        let mut frames = Vec::new();
+        dec.feed(&signal, |f| frames.push(f));
+        assert!(frames.len() as f64 >= rate.fps() * 3.0 - 2.0, "{rate}@{sr}: {}", frames.len());
+        for w in frames.windows(2) {
+            let a = w[0].frame.timecode().to_frames(rate);
+            let b = w[1].frame.timecode().to_frames(rate);
+            assert_eq!(b, a + 1, "{rate}@{sr}: non-consecutive frames");
+        }
+        for f in &frames {
+            let label = f.frame.timecode().to_frames(rate) - start_tc.to_frames(rate);
+            let frame_end = rate.sample_at_frame(label + 1, sr) as i64;
+            let err = f.end_sample as i64 - frame_end;
+            assert!((0..=2).contains(&err), "{rate}@{sr}: frame end off by {err} samples");
+        }
+    }
+
+    #[test]
+    fn generator_decodes_at_every_rate() {
+        for rate in FrameRate::ALL {
+            for sr in [44_100, 48_000, 96_000] {
+                render_and_decode(rate, sr, Timecode::new(1, 0, 0, 0), 512);
+            }
+        }
+    }
+
+    #[test]
+    fn generator_is_independent_of_buffer_size() {
+        let mut a = LtcGenerator::new(48_000, FrameRate::Fps29_97Df);
+        let mut b = LtcGenerator::new(48_000, FrameRate::Fps29_97Df);
+        let mut x = vec![0.0; 10_000];
+        let mut y = vec![0.0; 10_000];
+        a.render(-3000, &mut x);
+        for (i, c) in y.chunks_mut(37).enumerate() {
+            b.render(-3000 + (i * 37) as i64, c);
+        }
+        assert_eq!(x, y);
+    }
+
+    #[test]
+    fn drop_frame_crosses_minute_boundary() {
+        render_and_decode(FrameRate::Fps29_97Df, 48_000, Timecode::new(0, 0, 59, 0), 256);
     }
 }
