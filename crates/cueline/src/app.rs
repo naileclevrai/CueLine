@@ -652,3 +652,28 @@ impl eframe::App for CueLineApp {
         self.settings.save();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::timeline::snap_to_frame;
+    use cueline_core::FrameRate;
+
+    #[test]
+    fn decibels() {
+        assert_eq!(db_to_gain(0.0), 1.0);
+        assert!((db_to_gain(-6.0) - 0.501_187).abs() < 1e-5);
+        assert_eq!(db_to_gain(-120.0), 0.0);
+    }
+
+    #[test]
+    fn snapping_lands_on_frame_boundaries() {
+        let r = FrameRate::Fps25;
+        assert_eq!(snap_to_frame(1.03, r), 1.04);
+        assert_eq!(snap_to_frame(1.019, r), 1.0);
+        assert_eq!(snap_to_frame(0.01, r), 0.0);
+        let df = FrameRate::Fps29_97Df;
+        let t = snap_to_frame(10.0, df);
+        assert!((t * df.fps() - (t * df.fps()).round()).abs() < 1e-9);
+    }
+}
