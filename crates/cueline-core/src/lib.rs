@@ -4,6 +4,7 @@
 //! real-time audio thread.
 
 pub mod ltc;
+pub mod mtc;
 pub mod rate;
 pub mod timecode;
 
