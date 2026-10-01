@@ -19,7 +19,7 @@ use midir::{MidiOutput, MidiOutputConnection};
 use super::clock::now_ns;
 use super::shared::EngineShared;
 
-const SPIN_NS: u64 = 1_200_000;
+const SPIN_NS: u64 = 1_500_000;
 
 /// Destination for MIDI bytes; abstracted so scheduling can be tested.
 pub trait MidiSink: Send {
@@ -245,5 +245,61 @@ impl Worker {
         let msg = self.seq.message(q);
         self.send(&msg);
         self.next_q = Some(q + 1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::clock::ClockSnapshot;
+    use std::sync::Mutex;
+
+    struct Recorder(Arc<Mutex<Vec<(u64, Vec<u8>)>>>);
+
+    impl MidiSink for Recorder {
+        fn send(&mut self, bytes: &[u8]) -> Result<(), String> {
+            self.0.lock().unwrap().push((now_ns(), bytes.to_vec()));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn quarter_frames_follow_the_audio_clock() {
+        // Same conditions as the real MTC thread.
+        let _timer = crate::platform::TimerResolution::acquire();
+        crate::platform::promote_timing_thread();
+        let shared = EngineShared::new();
+        let sr = 48_000u32;
+        shared.sample_rate.store(sr, Ordering::Relaxed);
+        let (_tx, rx) = mpsc::channel();
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let mut w = Worker::new(shared.clone(), Arc::new(MtcStatus::default()), rx);
+        w.conn = Some(Box::new(Recorder(log.clone())));
+        w.enabled = true;
+        w.seq = MtcSequencer { rate: FrameRate::Fps25, start_frames: 90_000 };
+
+        let start = now_ns() + 20_000_000;
+        let snap = ClockSnapshot { position: 0, audible_ns: start, ns_per_sample: 1e9 / sr as f64, playing: true };
+        shared.clock.publish(snap);
+        while now_ns() < start + 400_000_000 {
+            w.tick();
+        }
+
+        let log = log.lock().unwrap();
+        let qf: Vec<_> = log.iter().filter(|(_, m)| m[0] == 0xF1).collect();
+        assert!(qf.len() >= 35, "only {} quarter frames", qf.len());
+        let mut worst = 0.0f64;
+        // Index of the first message, from its send time.
+        let first_pos = snap.position_at(qf[0].0);
+        let first_q = (first_pos * 4.0 * FrameRate::Fps25.fps() / sr as f64).round() as i64;
+        for (i, (t, m)) in qf.iter().enumerate() {
+            let q = first_q + i as i64;
+            assert_eq!(m.as_slice(), w.seq.message(q).as_slice(), "message {i}");
+            let target = snap.ns_at(w.seq.quarter_sample(q, sr));
+            worst = worst.max((*t as f64 - target).abs());
+        }
+        // Spin-waiting keeps each message within a fraction of a millisecond.
+        assert!(worst < 1_000_000.0, "worst timing error {:.3} ms", worst / 1e6);
+        eprintln!("MTC worst timing error: {:.1} µs over {} quarter frames", worst / 1e3, qf.len());
     }
 }
