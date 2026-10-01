@@ -48,6 +48,7 @@ pub struct UiState {
     pub show_markers: bool,
     pub show_help: bool,
     pub zoom_to_fit: bool,
+    pub zoom_to_fit_after_load: bool,
     pub export: export_dialog::ExportUi,
     pub prefs: prefs::PrefsUi,
     pub last_title: String,
@@ -66,6 +67,7 @@ impl Default for UiState {
             show_markers: true,
             show_help: false,
             zoom_to_fit: false,
+            zoom_to_fit_after_load: false,
             export: export_dialog::ExportUi::default(),
             prefs: prefs::PrefsUi::default(),
             last_title: String::new(),
@@ -128,6 +130,25 @@ fn handle_dropped_files(app: &mut CueLineApp, ctx: &egui::Context) {
     } else {
         app.import_files(audio);
     }
+}
+
+fn help_window(app: &mut CueLineApp, ctx: &egui::Context) {
+    let mut open = app.ui.show_help;
+    egui::Window::new("Keyboard shortcuts")
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .show(ctx, |ui| {
+            egui::Grid::new("help").num_columns(2).striped(true).spacing([24.0, 6.0]).show(ui, |ui| {
+                for (keys, what) in shortcuts::HELP {
+                    ui.label(egui::RichText::new(*keys).font(theme::mono(12.0)).color(theme::LTC));
+                    ui.label(*what);
+                    ui.end_row();
+                }
+            });
+        });
+    app.ui.show_help = open;
 }
 
 fn draw_toasts(app: &mut CueLineApp, ctx: &egui::Context) {
@@ -213,6 +234,7 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
         .show(ui, |ui| timeline::draw(app, ui));
     prefs::window(app, &ctx);
     export_dialog::window(app, &ctx);
+    help_window(app, &ctx);
     draw_toasts(app, &ctx);
     drop_overlay(&ctx);
     window_chrome(app, &ctx);
