@@ -138,6 +138,7 @@ pub fn menu_bar(app: &mut CueLineApp, ui: &mut Ui) {
             if shortcut(ui, "Go to timecode…", "G").clicked() {
                 app.ui.goto_text = Some(app.timecode_at(app.position_secs()).to_string());
             }
+            ui.checkbox(&mut app.settings.stop_at_end, "Stop at end of project");
             ui.separator();
             if shortcut(ui, "Previous marker", "[").clicked() {
                 app.goto_adjacent_marker(false);

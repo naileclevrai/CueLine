@@ -16,6 +16,8 @@ pub struct Settings {
     pub recent: Vec<PathBuf>,
     pub follow_playhead: bool,
     pub snap_to_frames: bool,
+    /// Stop the transport when the playhead passes the last clip or marker.
+    pub stop_at_end: bool,
 }
 
 fn settings_path() -> Option<PathBuf> {

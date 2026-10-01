@@ -315,6 +315,13 @@ impl CueLineApp {
         if let Some(e) = &mut self.engine {
             e.collect_garbage();
         }
+        if self.settings.stop_at_end && self.is_playing() {
+            let end = self.project_end_secs();
+            if end > 0.0 && self.position_secs() >= end {
+                self.send(Command::Pause);
+                self.seek(end);
+            }
+        }
         if self.shared.stream_error.swap(false, Ordering::Relaxed) {
             self.ui.toast_error("Audio device lost — trying to reconnect…".into());
             self.audio_retry_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(1));
