@@ -1,6 +1,7 @@
 //! User interface.
 
 pub mod headers;
+pub mod markers;
 pub mod menus;
 pub mod ruler;
 pub mod shortcuts;
@@ -207,6 +208,14 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
         .exact_size(66.0)
         .frame(egui::Frame::new().fill(theme::BG_HEADER).inner_margin(egui::Margin::symmetric(10, 6)))
         .show(ui, |ui| transport::draw(app, ui));
+    if app.ui.show_markers {
+        egui::Panel::right("markers")
+            .resizable(true)
+            .default_size(260.0)
+            .size_range(200.0..=480.0)
+            .frame(egui::Frame::new().fill(theme::BG_PANEL).inner_margin(egui::Margin::same(8)))
+            .show(ui, |ui| markers::panel(app, ui));
+    }
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(theme::BG_LANE_ALT))
         .show(ui, |ui| timeline::draw(app, ui));
