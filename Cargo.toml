@@ -8,6 +8,9 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/naileclevrai/CueLine"
 authors = ["CueLine contributors"]
+homepage = "https://github.com/naileclevrai/CueLine"
+keywords = ["timecode", "smpte", "ltc", "mtc", "audio"]
+categories = ["multimedia::audio"]
 
 [profile.release]
 opt-level = 3
