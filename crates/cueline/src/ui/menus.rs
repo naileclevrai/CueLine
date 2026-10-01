@@ -160,6 +160,7 @@ pub fn menu_bar(app: &mut CueLineApp, ui: &mut Ui) {
             ui.separator();
             ui.checkbox(&mut app.settings.follow_playhead, "Follow playhead (F)");
             ui.checkbox(&mut app.ui.show_markers, "Markers panel");
+            ui.checkbox(&mut app.ui.show_big_clock, "Big timecode window (B)");
             ui.add(egui::Slider::new(&mut app.view.track_height, 44.0..=200.0).text("Track height"));
         });
         ui.menu_button("Options", |ui| {

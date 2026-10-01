@@ -1,5 +1,6 @@
 //! User interface.
 
+pub mod bigclock;
 pub mod export_dialog;
 pub mod headers;
 pub mod markers;
@@ -47,6 +48,7 @@ pub struct UiState {
     pub rename_marker: Option<(usize, String)>,
     pub show_markers: bool,
     pub show_help: bool,
+    pub show_big_clock: bool,
     pub zoom_to_fit: bool,
     pub zoom_to_fit_after_load: bool,
     pub export: export_dialog::ExportUi,
@@ -66,6 +68,7 @@ impl Default for UiState {
             rename_marker: None,
             show_markers: true,
             show_help: false,
+            show_big_clock: false,
             zoom_to_fit: false,
             zoom_to_fit_after_load: false,
             export: export_dialog::ExportUi::default(),
@@ -242,6 +245,7 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     prefs::window(app, &ctx);
     export_dialog::window(app, &ctx);
     help_window(app, &ctx);
+    bigclock::window(app, &ctx);
     draw_toasts(app, &ctx);
     drop_overlay(&ctx);
     window_chrome(app, &ctx);
