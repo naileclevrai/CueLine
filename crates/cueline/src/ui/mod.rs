@@ -57,6 +57,8 @@ pub struct UiState {
     pub zoom_to_fit: bool,
     pub export: ExportUi,
     pub prefs: PrefsUi,
+    pub last_title: String,
+    pub closing: bool,
     meters: HashMap<u64, (f32, Instant)>,
 }
 
@@ -73,6 +75,8 @@ impl Default for UiState {
             zoom_to_fit: false,
             export: ExportUi::default(),
             prefs: PrefsUi::default(),
+            last_title: String::new(),
+            closing: false,
             meters: HashMap::new(),
         }
     }
@@ -133,6 +137,53 @@ fn handle_dropped_files(app: &mut CueLineApp, ctx: &egui::Context) {
     }
 }
 
+fn draw_toasts(app: &mut CueLineApp, ctx: &egui::Context) {
+    let now = Instant::now();
+    app.ui.toasts.retain(|t| t.until > now);
+    if app.ui.toasts.is_empty() {
+        return;
+    }
+    egui::Area::new(egui::Id::new("toasts"))
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-14.0, -14.0))
+        .order(egui::Order::Foreground)
+        .interactable(false)
+        .show(ctx, |ui| {
+            for t in app.ui.toasts.iter().rev().take(4) {
+                let color = match t.kind {
+                    ToastKind::Info => theme::ACCENT,
+                    ToastKind::Error => theme::ERROR,
+                };
+                egui::Frame::new()
+                    .fill(theme::BG_HEADER)
+                    .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.7)))
+                    .corner_radius(4)
+                    .inner_margin(egui::Margin::symmetric(12, 8))
+                    .show(ui, |ui| {
+                        ui.set_max_width(420.0);
+                        ui.label(egui::RichText::new(&t.text).color(theme::TEXT));
+                    });
+                ui.add_space(6.0);
+            }
+        });
+    ctx.request_repaint_after(Duration::from_millis(250));
+}
+
+/// Keeps the OS window title in sync and guards against losing changes.
+fn window_chrome(app: &mut CueLineApp, ctx: &egui::Context) {
+    let title = app.title();
+    if app.ui.last_title != title {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+        app.ui.last_title = title;
+    }
+    if ctx.input(|i| i.viewport().close_requested()) && !app.ui.closing {
+        if app.confirm_discard() {
+            app.ui.closing = true;
+        } else {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+    }
+}
+
 /// Shows a hint overlay while files are dragged over the window.
 fn drop_overlay(ctx: &egui::Context) {
     if ctx.input(|i| i.raw.hovered_files.is_empty()) {
@@ -159,5 +210,7 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(theme::BG_LANE_ALT))
         .show(ui, |ui| timeline::draw(app, ui));
+    draw_toasts(app, &ctx);
     drop_overlay(&ctx);
+    window_chrome(app, &ctx);
 }
