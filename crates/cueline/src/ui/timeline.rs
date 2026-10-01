@@ -13,6 +13,7 @@ use crate::app::{CueLineApp, TrackState};
 pub const HEADER_W: f32 = 236.0;
 pub const RULER_H: f32 = 30.0;
 pub const LTC_H: f32 = 34.0;
+pub const OVERVIEW_H: f32 = 16.0;
 const CLIP_TITLE_H: f32 = 15.0;
 const MIN_PPS: f32 = 0.02;
 const MAX_PPS: f32 = 20_000.0;
@@ -53,7 +54,8 @@ pub fn draw(app: &mut CueLineApp, ui: &mut Ui) {
     let lanes_left = full.left() + HEADER_W;
     let ruler = Rect::from_min_max(pos2(lanes_left, full.top()), pos2(full.right(), full.top() + RULER_H));
     let ltc = Rect::from_min_max(pos2(lanes_left, ruler.bottom()), pos2(full.right(), ruler.bottom() + LTC_H));
-    let lanes = Rect::from_min_max(pos2(lanes_left, ltc.bottom()), full.right_bottom());
+    let overview = Rect::from_min_max(pos2(lanes_left, full.bottom() - OVERVIEW_H), full.right_bottom());
+    let lanes = Rect::from_min_max(pos2(lanes_left, ltc.bottom()), pos2(full.right(), overview.top()));
     let headers = Rect::from_min_max(pos2(full.left(), ltc.bottom()), pos2(lanes_left, full.bottom()));
     let corner = Rect::from_min_max(full.left_top(), pos2(lanes_left, ruler.bottom()));
     let ltc_header = Rect::from_min_max(pos2(full.left(), ruler.bottom()), pos2(lanes_left, ltc.bottom()));
@@ -78,6 +80,7 @@ pub fn draw(app: &mut CueLineApp, ui: &mut Ui) {
     paint_ruler(app, &painter.with_clip_rect(ruler), ruler, map);
 
     lanes_interaction(app, ui, lanes, map);
+    overview_bar(app, ui, overview, lanes.width(), playhead);
     ruler_interaction(app, ui, ruler, map);
 
     // Cursor and playhead over everything in the arrange area.
@@ -348,6 +351,44 @@ fn paint_lanes(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
                 Stroke::new(1.0, color.gamma_multiply(0.3)),
             );
             p.add(Shape::mesh(mesh));
+        }
+    }
+}
+
+/// Whole-project strip with a draggable view window (acts as a scrollbar).
+fn overview_bar(app: &mut CueLineApp, ui: &mut Ui, rect: Rect, view_w: f32, playhead: f64) {
+    let p = ui.painter_at(rect);
+    p.rect_filled(rect, CornerRadius::ZERO, theme::BG_DEEP);
+    let view_secs = (view_w / app.view.px_per_sec) as f64;
+    let total = app.project_end_secs().max(app.view.scroll_secs + view_secs).max(10.0) * 1.02;
+    let start = app.view.scroll_secs.min(0.0);
+    let span = total - start;
+    let x_of = |t: f64| rect.left() + ((t - start) / span) as f32 * rect.width();
+
+    for t in &app.tracks {
+        let a = x_of(t.def.offset_secs);
+        let b = x_of(t.end_secs()).max(a + 1.0);
+        let r = Rect::from_min_max(pos2(a, rect.top() + 4.0), pos2(b, rect.bottom() - 4.0));
+        p.rect_filled(r, CornerRadius::ZERO, theme::rgb(t.def.color).gamma_multiply(0.35));
+    }
+    for m in &app.project.markers {
+        p.vline(x_of(m.time_secs), rect.y_range(), Stroke::new(1.0, theme::rgb(m.color).gamma_multiply(0.8)));
+    }
+    let win = Rect::from_min_max(
+        pos2(x_of(app.view.scroll_secs), rect.top() + 1.0),
+        pos2(x_of(app.view.scroll_secs + view_secs).max(x_of(app.view.scroll_secs) + 6.0), rect.bottom() - 1.0),
+    );
+    let resp = ui.interact(rect, ui.id().with("overview"), Sense::click_and_drag());
+    let active = resp.hovered() || resp.dragged();
+    p.rect_filled(win, CornerRadius::same(2), Color32::WHITE.gamma_multiply(if active { 0.14 } else { 0.08 }));
+    p.rect_stroke(win, CornerRadius::same(2), Stroke::new(1.0, theme::TEXT_FAINT), StrokeKind::Inside);
+    p.vline(x_of(playhead), rect.y_range(), Stroke::new(1.0, theme::PLAYHEAD));
+
+    if let Some(pos) = resp.interact_pointer_pos() {
+        if resp.clicked() || resp.dragged() {
+            // Centre the view on the pointer.
+            let t = start + ((pos.x - rect.left()) / rect.width()) as f64 * span;
+            app.view.scroll_secs = t - view_secs / 2.0;
         }
     }
 }
