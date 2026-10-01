@@ -3,7 +3,8 @@
 
 use eframe::egui::{self, Align2};
 
-use super::theme;
+use super::widgets::{tabular, tabular_width};
+use super::{fonts, theme};
 use crate::app::CueLineApp;
 
 pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
@@ -28,22 +29,30 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
             let rect = ui.max_rect();
             let p = ui.painter();
             p.rect_filled(rect, 0.0, theme::BG_DEEP);
-            // 11 monospace glyphs; Hack's advance is ~0.6 em.
-            let size = (rect.width() / (11.0 * 0.62)).min(rect.height() * 0.55);
-            let color = if playing { theme::PLAYING } else { theme::TEXT };
-            p.text(rect.center() - egui::vec2(0.0, size * 0.15), Align2::CENTER_CENTER, &tc, theme::mono(size), color);
+            let base = 100.0;
+            let w = tabular_width(p, &tc, &fonts::display_light(base)).max(1.0);
+            let size = (rect.width() * 0.88 / w * base).min(rect.height() * 0.5);
+            let color = if playing { theme::GREEN } else { theme::TEXT };
+            tabular(
+                p,
+                rect.center() - egui::vec2(0.0, size * 0.18),
+                Align2::CENTER_CENTER,
+                &tc,
+                fonts::display_light(size),
+                color,
+            );
             let info = match &next {
                 Some((name, left)) => {
-                    format!("NEXT  {}  in {:.1}s", if name.is_empty() { "marker" } else { name }, left)
+                    format!("NEXT  ·  {}  ·  {:.1} s", if name.is_empty() { "Cue" } else { name }, left)
                 }
-                None => format!("{} fps", rate.label()),
+                None => format!("{} FPS", rate.label()),
             };
             p.text(
-                egui::pos2(rect.center().x, rect.bottom() - size * 0.28),
+                egui::pos2(rect.center().x, rect.center().y + size * 0.48),
                 Align2::CENTER_CENTER,
                 info,
-                theme::mono((size * 0.18).max(12.0)),
-                theme::LTC,
+                fonts::medium((size * 0.15).max(12.0)),
+                theme::ORANGE,
             );
         },
     );
