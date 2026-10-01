@@ -13,3 +13,5 @@ All notable changes to this project are documented here. The format follows
 - Output routing for the program mix and LTC; WASAPI by default, optional ASIO.
 - Offline 24-bit WAV export (LTC only, mix + LTC, stereo mix + LTC).
 - `.cueline` JSON projects with relative media paths, undo/redo, drag & drop.
+- macOS-style interface: frameless window, unified toolbar with LCD, sheets, cue source list,
+  San Francisco when installed and embedded Inter (OFL) otherwise.

@@ -36,6 +36,10 @@ audio is.**
   drop, automatic reconnection when an audio device drops out, Reaper-style shortcuts.
 - Decodes WAV, AIFF, FLAC, MP3, AAC/M4A, ALAC and Ogg Vorbis; files are converted once to the
   device rate with a high-quality FFT resampler.
+- A **macOS-style interface**: frameless window with traffic lights, a unified toolbar around a
+  Logic-style LCD, settings sheets and a cue source list. It uses Apple's San Francisco font when
+  it is installed on the machine (read at runtime, never redistributed) and the embedded
+  [Inter](https://rsms.me/inter/) typeface otherwise.
 
 ## Download & run
 
@@ -104,4 +108,8 @@ d'environ 8 Mo, sans installation.
 
 ## License
 
-[MIT](LICENSE)
+CueLine is released under the [MIT](LICENSE) license.
+
+The embedded Inter typeface (`assets/fonts`) is © The Inter Project Authors and distributed under
+the [SIL Open Font License 1.1](assets/fonts/OFL.txt). No Apple font is included in this
+repository or in release builds.
