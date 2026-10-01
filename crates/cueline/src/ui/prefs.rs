@@ -1,10 +1,12 @@
-//! Preferences window: audio device, routing, timecode and MIDI.
+//! Settings sheet: audio device, routing, timecode and MIDI Timecode.
 
 use cueline_core::{FrameRate, Timecode};
 use eframe::egui::{self, RichText, Ui};
 
 use super::headers::channel_combo;
-use super::theme;
+use super::sheet::{self, footnote, group, row, row_separator, section};
+use super::widgets::{segmented, switch};
+use super::{fonts, theme};
 use crate::app::CueLineApp;
 use crate::engine::device::{host_names, list_output_devices, AudioConfig, DeviceInfo};
 use crate::engine::mtc_out::list_ports;
@@ -31,6 +33,7 @@ pub struct PrefsUi {
 }
 
 const BUFFER_SIZES: [u32; 7] = [64, 128, 256, 480, 512, 1024, 2048];
+const WIDTH: f32 = 520.0;
 
 impl PrefsUi {
     fn refresh(&mut self, app_cfg: &AudioConfig) {
@@ -54,86 +57,85 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
         app.ui.prefs.user_bits = format!("{:08X}", app.project.user_bits);
     }
     let mut open = true;
-    egui::Window::new("Preferences")
-        .open(&mut open)
-        .collapsible(false)
-        .resizable(false)
-        .default_width(460.0)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                let tab = &mut app.ui.prefs.tab;
-                ui.selectable_value(tab, Tab::Audio, "Audio device");
-                ui.selectable_value(tab, Tab::Timecode, "Timecode");
-                ui.selectable_value(tab, Tab::Midi, "MIDI Timecode");
-            });
-            ui.separator();
-            match app.ui.prefs.tab {
-                Tab::Audio => audio_tab(app, ui),
-                Tab::Timecode => timecode_tab(app, ui),
-                Tab::Midi => midi_tab(app, ui),
-            }
+    sheet::show(ctx, "Settings", &mut open, WIDTH, |ui| {
+        ui.vertical_centered(|ui| {
+            let mut tab = app.ui.prefs.tab;
+            segmented(
+                ui,
+                &mut tab,
+                &[(Tab::Audio, "Audio"), (Tab::Timecode, "Timecode"), (Tab::Midi, "MIDI Timecode")],
+            );
+            app.ui.prefs.tab = tab;
         });
+        ui.add_space(8.0);
+        match app.ui.prefs.tab {
+            Tab::Audio => audio_tab(app, ui),
+            Tab::Timecode => timecode_tab(app, ui),
+            Tab::Midi => midi_tab(app, ui),
+        }
+    });
     if !open {
         app.ui.prefs.open = false;
     }
 }
 
-fn grid(ui: &mut Ui, id: &str, add: impl FnOnce(&mut Ui)) {
-    egui::Grid::new(id).num_columns(2).spacing([16.0, 8.0]).min_col_width(120.0).show(ui, add);
+fn popup(ui: &mut Ui, id: &str, text: String, add: impl FnOnce(&mut Ui)) {
+    egui::ComboBox::from_id_salt(id).width(250.0).selected_text(text).show_ui(ui, add);
 }
 
 fn audio_tab(app: &mut CueLineApp, ui: &mut Ui) {
     let mut changed_host = false;
-    grid(ui, "audio", |ui| {
+    section(ui, "Output Device");
+    group(ui, |ui| {
         let p = &mut app.ui.prefs;
-        ui.label("Driver");
-        let host_label = p.draft.host.clone().unwrap_or_else(|| "System default".into());
-        egui::ComboBox::from_id_salt("host").width(260.0).selected_text(host_label).show_ui(ui, |ui| {
-            changed_host |= ui.selectable_value(&mut p.draft.host, None, "System default").changed();
-            for h in p.hosts.clone() {
-                changed_host |= ui.selectable_value(&mut p.draft.host, Some(h.clone()), h).changed();
-            }
-        });
-        ui.end_row();
-
-        ui.label("Output device");
-        let dev_label = p.draft.device.clone().unwrap_or_else(|| "Default output".into());
-        egui::ComboBox::from_id_salt("device").width(260.0).selected_text(dev_label).show_ui(ui, |ui| {
-            ui.selectable_value(&mut p.draft.device, None, "Default output");
-            for d in &p.devices {
-                ui.selectable_value(
-                    &mut p.draft.device,
-                    Some(d.name.clone()),
-                    format!("{}  ({} ch)", d.name, d.channels),
-                );
-            }
-        });
-        ui.end_row();
-
-        let info = p.devices.iter().find(|d| Some(&d.name) == p.draft.device.as_ref());
-        ui.label("Sample rate");
-        let rate_label = p.draft.sample_rate.map_or("Device default".into(), |r| format!("{r} Hz"));
-        egui::ComboBox::from_id_salt("rate").width(260.0).selected_text(rate_label).show_ui(ui, |ui| {
-            ui.selectable_value(&mut p.draft.sample_rate, None, "Device default");
-            let rates = info.map_or(vec![44_100, 48_000, 96_000], |d| d.sample_rates.clone());
-            for r in rates {
-                ui.selectable_value(&mut p.draft.sample_rate, Some(r), format!("{r} Hz"));
-            }
-        });
-        ui.end_row();
-
-        ui.label("Buffer size");
-        let buf_label = p.draft.buffer_frames.map_or("Driver default".into(), |b| format!("{b} samples"));
-        egui::ComboBox::from_id_salt("buffer").width(260.0).selected_text(buf_label).show_ui(ui, |ui| {
-            ui.selectable_value(&mut p.draft.buffer_frames, None, "Driver default");
-            for b in BUFFER_SIZES {
-                if info.and_then(|d| d.buffer_range).is_none_or(|(lo, hi)| (lo..=hi).contains(&b)) {
-                    ui.selectable_value(&mut p.draft.buffer_frames, Some(b), format!("{b} samples"));
+        row(ui, "Driver", |ui| {
+            let label = p.draft.host.clone().unwrap_or_else(|| "System default".into());
+            popup(ui, "host", label, |ui| {
+                changed_host |= ui.selectable_value(&mut p.draft.host, None, "System default").changed();
+                for h in p.hosts.clone() {
+                    changed_host |= ui.selectable_value(&mut p.draft.host, Some(h.clone()), h).changed();
                 }
-            }
+            });
         });
-        ui.end_row();
+        row_separator(ui);
+        row(ui, "Device", |ui| {
+            let label = p.draft.device.clone().unwrap_or_else(|| "Default output".into());
+            popup(ui, "device", label, |ui| {
+                ui.selectable_value(&mut p.draft.device, None, "Default output");
+                for d in &p.devices {
+                    ui.selectable_value(
+                        &mut p.draft.device,
+                        Some(d.name.clone()),
+                        format!("{}  —  {} outputs", d.name, d.channels),
+                    );
+                }
+            });
+        });
+        let info = p.devices.iter().find(|d| Some(&d.name) == p.draft.device.as_ref()).cloned();
+        row_separator(ui);
+        row(ui, "Sample rate", |ui| {
+            let label =
+                p.draft.sample_rate.map_or("Device default".into(), |r| format!("{:.1} kHz", r as f32 / 1000.0));
+            popup(ui, "rate", label, |ui| {
+                ui.selectable_value(&mut p.draft.sample_rate, None, "Device default");
+                let rates = info.as_ref().map_or(vec![44_100, 48_000, 96_000], |d| d.sample_rates.clone());
+                for r in rates {
+                    ui.selectable_value(&mut p.draft.sample_rate, Some(r), format!("{:.1} kHz", r as f32 / 1000.0));
+                }
+            });
+        });
+        row_separator(ui);
+        row(ui, "Buffer size", |ui| {
+            let label = p.draft.buffer_frames.map_or("Driver default".into(), |b| format!("{b} samples"));
+            popup(ui, "buffer", label, |ui| {
+                ui.selectable_value(&mut p.draft.buffer_frames, None, "Driver default");
+                for b in BUFFER_SIZES {
+                    if info.as_ref().and_then(|d| d.buffer_range).is_none_or(|(lo, hi)| (lo..=hi).contains(&b)) {
+                        ui.selectable_value(&mut p.draft.buffer_frames, Some(b), format!("{b} samples"));
+                    }
+                }
+            });
+        });
     });
     if changed_host {
         let host = app.ui.prefs.draft.host.clone();
@@ -141,64 +143,65 @@ fn audio_tab(app: &mut CueLineApp, ui: &mut Ui) {
         app.ui.prefs.draft.device = None;
     }
 
-    ui.add_space(6.0);
-    ui.horizontal(|ui| {
-        let dirty = app.ui.prefs.draft != app.settings.audio;
-        if ui.add_enabled(dirty, egui::Button::new("Apply")).clicked() {
-            app.settings.audio = app.ui.prefs.draft.clone();
-            app.settings.save();
-            app.restart_audio();
-        }
-        if ui.button("Refresh devices").clicked() {
-            let cfg = app.ui.prefs.draft.clone();
-            app.ui.prefs.refresh(&cfg);
-        }
-        if ui.button("Restart audio").on_hover_text("Re-open the device, e.g. after it was unplugged").clicked() {
-            app.restart_audio();
-        }
-    });
     match (&app.engine, &app.engine_error) {
-        (Some(e), _) => {
-            ui.label(
-                RichText::new(format!(
-                    "Running: {} — {} @ {} Hz, {} outputs",
-                    e.host_name, e.device_name, e.sample_rate, e.channels
-                ))
-                .small()
-                .color(theme::PLAYING),
-            );
-        }
+        (Some(e), _) => footnote(
+            ui,
+            &format!(
+                "Running · {} · {} · {:.1} kHz · {} outputs",
+                e.host_name,
+                e.device_name,
+                e.sample_rate as f32 / 1000.0,
+                e.channels
+            ),
+        ),
         (None, Some(err)) => {
-            ui.label(RichText::new(err).small().color(theme::ERROR));
+            ui.label(RichText::new(err).font(fonts::text(11.5)).color(theme::RED));
         }
         _ => {}
     }
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        if sheet::button(ui, "Refresh").clicked() {
+            let cfg = app.ui.prefs.draft.clone();
+            app.ui.prefs.refresh(&cfg);
+        }
+        if sheet::button(ui, "Restart Audio").on_hover_text("Re-open the device, e.g. after it was unplugged").clicked()
+        {
+            app.restart_audio();
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let dirty = app.ui.prefs.draft != app.settings.audio;
+            if sheet::primary_button(ui, "Apply", dirty).clicked() {
+                app.settings.audio = app.ui.prefs.draft.clone();
+                app.settings.save();
+                app.restart_audio();
+            }
+        });
+    });
 
-    ui.add_space(8.0);
-    ui.label(RichText::new("Routing").strong());
+    section(ui, "Routing");
     let channels = app.output_channels();
     let mut changed = false;
-    grid(ui, "routing", |ui| {
+    group(ui, |ui| {
         let r = &mut app.project.routing;
-        ui.label("Program left");
-        changed |= channel_combo(ui, "main_l", &mut r.main_left, channels, true);
-        ui.end_row();
-        ui.label("Program right");
-        changed |= channel_combo(ui, "main_r", &mut r.main_right, channels, true);
-        ui.end_row();
-        ui.label("LTC");
-        changed |= channel_combo(ui, "ltc_ch", &mut app.project.ltc.channel, channels, true);
-        ui.end_row();
+        row(ui, "Program left", |ui| changed |= channel_combo(ui, "main_l", &mut r.main_left, channels, true));
+        row_separator(ui);
+        row(ui, "Program right", |ui| changed |= channel_combo(ui, "main_r", &mut r.main_right, channels, true));
+        row_separator(ui);
+        row(ui, "Timecode (LTC)", |ui| {
+            changed |= channel_combo(ui, "ltc_ch", &mut app.project.ltc.channel, channels, true)
+        });
     });
-    ui.label(
-        RichText::new("Set only one program channel to sum the mix to mono (typical: program on 1, LTC on 2).")
-            .small()
-            .color(theme::TEXT_DIM),
+    footnote(
+        ui,
+        "Route only one program channel to sum the mix to mono — the classic setup is program on 1, LTC on 2.",
     );
     let r = &app.project.routing;
     let ltc = app.project.ltc.channel;
     if ltc >= 0 && (ltc == r.main_left || ltc == r.main_right) {
-        ui.label(RichText::new("Warning: LTC shares an output with the program mix.").color(theme::WARN));
+        ui.label(
+            RichText::new("LTC shares an output with the program mix.").font(fonts::text(11.5)).color(theme::YELLOW),
+        );
     }
     if changed {
         app.dirty = true;
@@ -208,70 +211,84 @@ fn audio_tab(app: &mut CueLineApp, ui: &mut Ui) {
 
 fn timecode_tab(app: &mut CueLineApp, ui: &mut Ui) {
     let mut changed = false;
-    grid(ui, "tc", |ui| {
-        ui.label("Frame rate");
-        let before = app.project.frame_rate;
-        egui::ComboBox::from_id_salt("fps").width(160.0).selected_text(before.label()).show_ui(ui, |ui| {
-            for r in FrameRate::ALL {
-                changed |= ui.selectable_value(&mut app.project.frame_rate, r, r.label()).changed();
+    section(ui, "Timecode");
+    group(ui, |ui| {
+        row(ui, "Frame rate", |ui| {
+            let before = app.project.frame_rate;
+            egui::ComboBox::from_id_salt("fps").width(140.0).selected_text(format!("{} fps", before.label())).show_ui(
+                ui,
+                |ui| {
+                    for r in FrameRate::ALL {
+                        changed |=
+                            ui.selectable_value(&mut app.project.frame_rate, r, format!("{} fps", r.label())).changed();
+                    }
+                },
+            );
+            if app.project.frame_rate != before && !app.project.start_timecode.is_valid(app.project.frame_rate) {
+                let tc = app.project.start_timecode;
+                app.project.start_timecode = Timecode { frames: 0, ..tc };
+                app.ui.prefs.start_tc = app.project.start_timecode.to_string();
             }
         });
-        if app.project.frame_rate != before && !app.project.start_timecode.is_valid(app.project.frame_rate) {
-            let tc = app.project.start_timecode;
-            app.project.start_timecode = Timecode { frames: 0, ..tc };
-            app.ui.prefs.start_tc = app.project.start_timecode.to_string();
-        }
-        ui.end_row();
-
-        ui.label("Start timecode").on_hover_text("Timecode at the project start (time 0)");
-        let p = &mut app.ui.prefs;
-        let resp = ui.add(egui::TextEdit::singleline(&mut p.start_tc).font(theme::mono(13.0)).desired_width(160.0));
-        if resp.lost_focus() || ui.input(|i| i.key_pressed(egui::Key::Enter)) && resp.has_focus() {
-            match Timecode::parse(&p.start_tc, app.project.frame_rate) {
-                Some(tc) => {
-                    if tc != app.project.start_timecode {
+        row_separator(ui);
+        row(ui, "Start timecode", |ui| {
+            let p = &mut app.ui.prefs;
+            let resp = ui.add(egui::TextEdit::singleline(&mut p.start_tc).font(fonts::mono(13.0)).desired_width(130.0));
+            if resp.lost_focus() {
+                match Timecode::parse(&p.start_tc, app.project.frame_rate) {
+                    Some(tc) => {
+                        changed |= tc != app.project.start_timecode;
                         app.project.start_timecode = tc;
-                        changed = true;
+                        p.start_tc = tc.to_string();
                     }
-                    p.start_tc = tc.to_string();
+                    None => p.start_tc = app.project.start_timecode.to_string(),
                 }
-                None => p.start_tc = app.project.start_timecode.to_string(),
             }
-        }
-        ui.end_row();
-
-        ui.label("User bits (hex)").on_hover_text("32 user bits carried in every LTC frame");
-        let resp = ui.add(
-            egui::TextEdit::singleline(&mut p.user_bits).font(theme::mono(13.0)).desired_width(160.0).char_limit(8),
-        );
-        if resp.lost_focus() {
-            match u32::from_str_radix(p.user_bits.trim(), 16) {
-                Ok(v) => {
-                    changed |= v != app.project.user_bits;
-                    app.project.user_bits = v;
+        });
+        row_separator(ui);
+        row(ui, "User bits", |ui| {
+            let p = &mut app.ui.prefs;
+            let resp = ui.add(
+                egui::TextEdit::singleline(&mut p.user_bits).font(fonts::mono(13.0)).desired_width(130.0).char_limit(8),
+            );
+            if resp.lost_focus() {
+                match u32::from_str_radix(p.user_bits.trim(), 16) {
+                    Ok(v) => {
+                        changed |= v != app.project.user_bits;
+                        app.project.user_bits = v;
+                    }
+                    Err(_) => p.user_bits = format!("{:08X}", app.project.user_bits),
                 }
-                Err(_) => p.user_bits = format!("{:08X}", app.project.user_bits),
             }
-        }
-        ui.end_row();
-
-        ui.label("LTC level");
-        changed |= ui
-            .add(egui::Slider::new(&mut app.project.ltc.level_db, -40.0..=0.0).suffix(" dBFS").fixed_decimals(1))
-            .changed();
-        ui.end_row();
-
-        ui.label("Master volume");
-        changed |= ui
-            .add(egui::Slider::new(&mut app.project.master_db, -40.0..=12.0).suffix(" dB").fixed_decimals(1))
-            .changed();
-        ui.end_row();
+        });
     });
-    ui.add_space(4.0);
-    ui.label(
-        RichText::new("LTC is generated inside the audio callback, sample-locked to the program audio. -18 to -10 dBFS suits most readers.")
-            .small()
-            .color(theme::TEXT_DIM),
+    footnote(ui, "The start timecode is the label at project time zero. User bits are 8 hexadecimal digits.");
+
+    section(ui, "Levels");
+    group(ui, |ui| {
+        row(ui, "LTC output", |ui| {
+            let mut on = app.project.ltc.enabled;
+            if switch(ui, &mut on).changed() {
+                app.project.ltc.enabled = on;
+                changed = true;
+            }
+        });
+        row_separator(ui);
+        row(ui, "LTC level", |ui| {
+            changed |= ui
+                .add(egui::Slider::new(&mut app.project.ltc.level_db, -40.0..=0.0).suffix(" dBFS").fixed_decimals(1))
+                .changed();
+        });
+        row_separator(ui);
+        row(ui, "Master volume", |ui| {
+            changed |= ui
+                .add(egui::Slider::new(&mut app.project.master_db, -40.0..=12.0).suffix(" dB").fixed_decimals(1))
+                .changed();
+        });
+    });
+    footnote(
+        ui,
+        "LTC is generated inside the audio callback, sample-locked to the program. −18 to −10 dBFS suits most readers.",
     );
     if changed {
         app.dirty = true;
@@ -281,49 +298,51 @@ fn timecode_tab(app: &mut CueLineApp, ui: &mut Ui) {
 
 fn midi_tab(app: &mut CueLineApp, ui: &mut Ui) {
     let mut changed = false;
-    grid(ui, "midi", |ui| {
-        ui.label("Send MTC");
-        changed |= ui.checkbox(&mut app.project.mtc.enabled, "").changed();
-        ui.end_row();
-
-        ui.label("Output port");
-        let label = app.project.mtc.port.clone().unwrap_or_else(|| "None".into());
-        egui::ComboBox::from_id_salt("midi_port").width(260.0).selected_text(label).show_ui(ui, |ui| {
-            changed |= ui.selectable_value(&mut app.project.mtc.port, None, "None").changed();
-            for p in app.ui.prefs.midi_ports.clone() {
-                changed |= ui.selectable_value(&mut app.project.mtc.port, Some(p.clone()), p).changed();
+    section(ui, "MIDI Timecode");
+    group(ui, |ui| {
+        row(ui, "Send MTC", |ui| {
+            let mut on = app.project.mtc.enabled;
+            if switch(ui, &mut on).changed() {
+                app.project.mtc.enabled = on;
+                changed = true;
             }
         });
-        ui.end_row();
-
-        ui.label("Offset").on_hover_text("Positive values send MTC earlier to compensate receiver latency");
-        changed |= ui
-            .add(
-                egui::DragValue::new(&mut app.project.mtc.offset_ms)
-                    .range(-200.0..=200.0)
-                    .speed(0.1)
-                    .suffix(" ms")
-                    .fixed_decimals(1),
-            )
-            .changed();
-        ui.end_row();
+        row_separator(ui);
+        row(ui, "Output port", |ui| {
+            let label = app.project.mtc.port.clone().unwrap_or_else(|| "None".into());
+            popup(ui, "midi_port", label, |ui| {
+                changed |= ui.selectable_value(&mut app.project.mtc.port, None, "None").changed();
+                for p in app.ui.prefs.midi_ports.clone() {
+                    changed |= ui.selectable_value(&mut app.project.mtc.port, Some(p.clone()), p).changed();
+                }
+            });
+        });
+        row_separator(ui);
+        row(ui, "Latency compensation", |ui| {
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut app.project.mtc.offset_ms)
+                        .range(-200.0..=200.0)
+                        .speed(0.1)
+                        .suffix(" ms")
+                        .fixed_decimals(1),
+                )
+                .on_hover_text("Positive values send MTC earlier to compensate receiver latency")
+                .changed();
+        });
     });
-    if ui.button("Refresh ports").clicked() {
+    if let Some(err) = app.mtc.status.error.lock().unwrap().clone() {
+        ui.label(RichText::new(err).font(fonts::text(11.5)).color(theme::RED));
+    }
+    footnote(
+        ui,
+        "Quarter-frames are scheduled on a time-critical thread against the audio clock and the output latency, \
+         so MTC lines up with what you hear. A full-frame message is sent on every locate.",
+    );
+    ui.add_space(6.0);
+    if sheet::button(ui, "Refresh Ports").clicked() {
         app.ui.prefs.midi_ports = list_ports();
     }
-    if let Some(err) = app.mtc.status.error.lock().unwrap().clone() {
-        ui.label(RichText::new(err).small().color(theme::ERROR));
-    }
-    ui.add_space(4.0);
-    ui.label(
-        RichText::new(
-            "Quarter-frames are scheduled on a time-critical thread against the audio clock, \
-             compensated for the output latency, so MTC lines up with what you hear. \
-             A full-frame message is sent on every locate.",
-        )
-        .small()
-        .color(theme::TEXT_DIM),
-    );
     if changed {
         app.dirty = true;
         app.apply_project_to_engine();
