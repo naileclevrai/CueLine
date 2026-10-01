@@ -1,5 +1,6 @@
 //! User interface.
 
+pub mod ruler;
 pub mod theme;
 pub mod transport;
 pub mod widgets;
