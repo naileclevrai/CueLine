@@ -3,6 +3,7 @@
 pub mod headers;
 pub mod menus;
 pub mod ruler;
+pub mod shortcuts;
 pub mod theme;
 pub mod timeline;
 pub mod transport;
@@ -103,6 +104,7 @@ impl UiState {
 }
 
 pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
+    shortcuts::handle(app, &ui.ctx().clone());
     egui::Panel::top("menu")
         .frame(egui::Frame::new().fill(theme::BG_DEEP).inner_margin(egui::Margin::symmetric(6, 2)))
         .show(ui, |ui| menus::menu_bar(app, ui));
