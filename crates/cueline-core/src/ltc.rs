@@ -60,10 +60,7 @@ impl LtcFrame {
     }
 
     pub fn user_bits(self) -> u32 {
-        USER_BIT_GROUPS
-            .iter()
-            .enumerate()
-            .fold(0, |acc, (i, pos)| acc | (self.get(*pos, 4) as u32) << (i * 4))
+        USER_BIT_GROUPS.iter().enumerate().fold(0, |acc, (i, pos)| acc | (self.get(*pos, 4) as u32) << (i * 4))
     }
 
     fn put(&mut self, pos: usize, len: usize, value: u8) {

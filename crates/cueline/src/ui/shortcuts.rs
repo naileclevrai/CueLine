@@ -72,7 +72,11 @@ pub fn handle(app: &mut CueLineApp, ctx: &egui::Context) {
             .events
             .iter()
             .filter_map(|e| match e {
-                egui::Event::Key { key, pressed: true, repeat, .. } if !*repeat || matches!(key, Key::ArrowLeft | Key::ArrowRight) => Some(*key),
+                egui::Event::Key { key, pressed: true, repeat, .. }
+                    if !*repeat || matches!(key, Key::ArrowLeft | Key::ArrowRight) =>
+                {
+                    Some(*key)
+                }
                 _ => None,
             })
             .collect();
@@ -120,7 +124,8 @@ pub fn handle(app: &mut CueLineApp, ctx: &egui::Context) {
                 app.view.selected_track = None;
             }
             k => {
-                let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
+                let digits =
+                    [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
                 if let Some(n) = digits.iter().position(|d| *d == k) {
                     app.goto_marker(n);
                 }

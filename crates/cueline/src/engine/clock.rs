@@ -161,7 +161,8 @@ mod tests {
 
     #[test]
     fn snapshot_extrapolates() {
-        let s = ClockSnapshot { position: 48_000, audible_ns: 1_000_000_000, ns_per_sample: 1e9 / 48_000.0, playing: true };
+        let s =
+            ClockSnapshot { position: 48_000, audible_ns: 1_000_000_000, ns_per_sample: 1e9 / 48_000.0, playing: true };
         assert!((s.position_at(1_500_000_000) - 72_000.0).abs() < 1e-6);
         assert!((s.ns_at(72_000.0) - 1.5e9).abs() < 1e-3);
     }

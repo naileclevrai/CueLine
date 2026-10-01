@@ -53,12 +53,7 @@ impl Peaks {
             return None;
         }
         let span = end - start;
-        let level = self
-            .levels
-            .iter()
-            .rev()
-            .find(|l| (l.block as f64) <= span)
-            .unwrap_or(&self.levels[0]);
+        let level = self.levels.iter().rev().find(|l| (l.block as f64) <= span).unwrap_or(&self.levels[0]);
         let a = (start as usize) / level.block;
         let b = ((end.ceil() as usize).div_ceil(level.block)).clamp(a + 1, level.min.len());
         let lo = level.min[a..b].iter().copied().fold(f32::MAX, f32::min);

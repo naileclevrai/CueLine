@@ -33,7 +33,14 @@ pub struct ExportUi {
 
 impl Default for ExportUi {
     fn default() -> Self {
-        Self { open: false, kind: ExportKind::MonoMixLtc, from: String::new(), to: String::new(), initialised: false, running: None }
+        Self {
+            open: false,
+            kind: ExportKind::MonoMixLtc,
+            from: String::new(),
+            to: String::new(),
+            initialised: false,
+            running: None,
+        }
     }
 }
 
@@ -105,9 +112,14 @@ fn contents(app: &mut CueLineApp, ui: &mut egui::Ui) {
         }
     });
     ui.label(
-        RichText::new(format!("24-bit WAV at {} Hz, {} fps LTC at {:.1} dBFS.", app.sample_rate(), rate.label(), app.project.ltc.level_db))
-            .small()
-            .color(theme::TEXT_DIM),
+        RichText::new(format!(
+            "24-bit WAV at {} Hz, {} fps LTC at {:.1} dBFS.",
+            app.sample_rate(),
+            rate.label(),
+            app.project.ltc.level_db
+        ))
+        .small()
+        .color(theme::TEXT_DIM),
     );
     ui.add_space(6.0);
     if ui.button("Export…").clicked() {
@@ -131,7 +143,11 @@ fn start(app: &mut CueLineApp) {
         app.ui.toast_error("Export end must be after its start".into());
         return;
     }
-    let stem = app.project_path.as_ref().and_then(|p| p.file_stem()).map_or("CueLine".into(), |s| s.to_string_lossy().into_owned());
+    let stem = app
+        .project_path
+        .as_ref()
+        .and_then(|p| p.file_stem())
+        .map_or("CueLine".into(), |s| s.to_string_lossy().into_owned());
     let Some(mut path) = rfd::FileDialog::new()
         .set_title("Export WAV")
         .set_file_name(format!("{stem} LTC.wav"))
@@ -173,10 +189,7 @@ fn start(app: &mut CueLineApp) {
     let progress = Arc::new(AtomicF32::new(0.0));
     let cancel = Arc::new(AtomicBool::new(false));
     let (p, c) = (progress.clone(), cancel.clone());
-    let handle = std::thread::Builder::new()
-        .name("cueline-export".into())
-        .spawn(move || run(job, &p, &c))
-        .ok();
+    let handle = std::thread::Builder::new().name("cueline-export".into()).spawn(move || run(job, &p, &c)).ok();
     app.ui.export.running = Some(Running { progress, cancel, handle, path });
 }
 

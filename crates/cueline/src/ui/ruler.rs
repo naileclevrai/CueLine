@@ -31,10 +31,8 @@ pub fn choose_steps(px_per_sec: f32, rate: FrameRate, min_px: f32) -> (Step, Ste
         .map(Step::Frames)
         .chain([1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600].into_iter().map(Step::Seconds))
         .collect();
-    let idx = candidates
-        .iter()
-        .position(|s| s.secs(rate) as f32 * px_per_sec >= min_px)
-        .unwrap_or(candidates.len() - 1);
+    let idx =
+        candidates.iter().position(|s| s.secs(rate) as f32 * px_per_sec >= min_px).unwrap_or(candidates.len() - 1);
     let major = candidates[idx];
     let minor = match major {
         Step::Frames(1) => Step::Frames(1),

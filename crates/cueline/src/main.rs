@@ -22,7 +22,11 @@ fn main() -> eframe::Result {
             .with_inner_size([1280.0, 760.0])
             .with_min_inner_size([820.0, 480.0])
             .with_drag_and_drop(true)
-            .with_icon(egui::IconData { rgba: include_bytes!("../../../assets/icon-64.rgba").to_vec(), width: 64, height: 64 }),
+            .with_icon(egui::IconData {
+                rgba: include_bytes!("../../../assets/icon-64.rgba").to_vec(),
+                width: 64,
+                height: 64,
+            }),
         ..Default::default()
     };
     let open = std::env::args_os().nth(1).map(std::path::PathBuf::from);

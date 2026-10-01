@@ -229,7 +229,5 @@ where
         log::error!("audio stream error: {e}");
         err_shared.stream_error.store(true, Ordering::Relaxed);
     };
-    device
-        .build_output_stream::<T, _, _>(*config, data_cb, err_cb, None)
-        .map_err(|e| e.to_string())
+    device.build_output_stream::<T, _, _>(*config, data_cb, err_cb, None).map_err(|e| e.to_string())
 }

@@ -63,10 +63,7 @@ impl Timecode {
     /// 10 minutes.
     pub fn parse(text: &str, rate: FrameRate) -> Option<Self> {
         let mut parts = [0u8; 4];
-        let fields: Vec<&str> = text
-            .trim()
-            .split([':', ';', '.', ','])
-            .collect();
+        let fields: Vec<&str> = text.trim().split([':', ';', '.', ',']).collect();
         if fields.is_empty() || fields.len() > 4 {
             return None;
         }

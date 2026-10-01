@@ -18,11 +18,8 @@ pub fn resample(channels: &[Vec<f32>], from: u32, to: u32) -> Result<Vec<Vec<f32
     let out_len = rs.process_all_needed_output_len(frames);
     let mut out = vec![vec![0.0f32; out_len]; n_ch];
     let written = {
-        let mut output =
-            SequentialSliceOfVecs::new_mut(&mut out, n_ch, out_len).map_err(|e| e.to_string())?;
-        rs.process_all_into_buffer(&input, &mut output, frames, None)
-            .map_err(|e| format!("resampling failed: {e}"))?
-            .1
+        let mut output = SequentialSliceOfVecs::new_mut(&mut out, n_ch, out_len).map_err(|e| e.to_string())?;
+        rs.process_all_into_buffer(&input, &mut output, frames, None).map_err(|e| format!("resampling failed: {e}"))?.1
     };
     for ch in &mut out {
         ch.truncate(written);

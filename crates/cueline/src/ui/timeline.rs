@@ -171,7 +171,13 @@ fn paint_ruler(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
         let x = map.x(t).round() + 0.5;
         p.vline(x, (rect.bottom() - 12.0)..=rect.bottom(), Stroke::new(1.0, theme::TEXT_FAINT));
         let tc = app.timecode_at(t + 1e-6);
-        p.text(pos2(x + 4.0, rect.top() + 3.0), Align2::LEFT_TOP, tc.display(rate).to_string(), font.clone(), theme::TEXT_DIM);
+        p.text(
+            pos2(x + 4.0, rect.top() + 3.0),
+            Align2::LEFT_TOP,
+            tc.display(rate).to_string(),
+            font.clone(),
+            theme::TEXT_DIM,
+        );
     }
     // Project end.
     let end = app.project_end_secs();
@@ -187,7 +193,11 @@ fn paint_ruler(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
         let label = if m.name.is_empty() { format!("{}", i + 1) } else { format!("{}  {}", i + 1, m.name) };
         let galley = p.layout_no_wrap(label, egui::FontId::proportional(11.0), Color32::BLACK);
         let flag = Rect::from_min_size(pos2(x, rect.top() + 15.0), vec2(galley.size().x + 8.0, 14.0));
-        p.rect_filled(flag, CornerRadius { nw: 0, ne: 2, sw: 0, se: 2 }, if selected { color } else { color.gamma_multiply(0.85) });
+        p.rect_filled(
+            flag,
+            CornerRadius { nw: 0, ne: 2, sw: 0, se: 2 },
+            if selected { color } else { color.gamma_multiply(0.85) },
+        );
         p.galley(pos2(flag.left() + 4.0, flag.top()), galley, Color32::BLACK);
         p.vline(x, rect.top() + 15.0..=rect.bottom(), Stroke::new(1.5, color));
     }
@@ -214,7 +224,13 @@ fn paint_ltc_lane(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
             p.vline(x, band.y_range(), Stroke::new(1.0, base.gamma_multiply(0.45)));
             if px_per_frame >= 78.0 {
                 let tc = app.timecode_at(t + 1e-6);
-                p.text(pos2(x + 4.0, band.center().y), Align2::LEFT_CENTER, tc.display(rate).to_string(), theme::mono(10.5), base.gamma_multiply(0.9));
+                p.text(
+                    pos2(x + 4.0, band.center().y),
+                    Align2::LEFT_CENTER,
+                    tc.display(rate).to_string(),
+                    theme::mono(10.5),
+                    base.gamma_multiply(0.9),
+                );
             }
         }
     } else {
@@ -278,9 +294,17 @@ fn paint_lanes(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
         let body = if dim { color.gamma_multiply(0.12) } else { color.gamma_multiply(0.22) };
         p.rect_filled(clip, CornerRadius::same(2), body);
         let title = Rect::from_min_max(clip.left_top(), pos2(clip.right(), clip.top() + CLIP_TITLE_H));
-        p.rect_filled(title, CornerRadius { nw: 2, ne: 2, sw: 0, se: 0 }, if dim { color.gamma_multiply(0.3) } else { color.gamma_multiply(0.7) });
+        p.rect_filled(
+            title,
+            CornerRadius { nw: 2, ne: 2, sw: 0, se: 0 },
+            if dim { color.gamma_multiply(0.3) } else { color.gamma_multiply(0.7) },
+        );
         let selected = app.view.selected_track == Some(track.id);
-        let outline = if selected { Stroke::new(1.0, Color32::WHITE.gamma_multiply(0.8)) } else { Stroke::new(1.0, color.gamma_multiply(0.5)) };
+        let outline = if selected {
+            Stroke::new(1.0, Color32::WHITE.gamma_multiply(0.8))
+        } else {
+            Stroke::new(1.0, color.gamma_multiply(0.5))
+        };
         p.rect_stroke(clip, CornerRadius::same(2), outline, StrokeKind::Inside);
         let name_pos = pos2(clip.left().max(rect.left()) + 5.0, title.center().y);
         let status = match &track.state {
@@ -297,7 +321,8 @@ fn paint_lanes(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
         );
 
         if let Some(peaks) = &track.peaks {
-            let wave = Rect::from_min_max(pos2(clip.left(), title.bottom() + 2.0), pos2(clip.right(), clip.bottom() - 2.0));
+            let wave =
+                Rect::from_min_max(pos2(clip.left(), title.bottom() + 2.0), pos2(clip.right(), clip.bottom() - 2.0));
             let amp = wave.height() * 0.5 * crate::app::db_to_gain(track.def.gain_db).min(4.0);
             let mid = wave.center().y;
             let wave_color = if dim { color.gamma_multiply(0.35) } else { color.gamma_multiply(1.1) };
@@ -311,10 +336,17 @@ fn paint_lanes(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
                 if let Some((lo, hi)) = peaks.range(ta * sr, tb * sr) {
                     let y0 = (mid - hi.clamp(-1.0, 1.0) * amp).max(wave.top());
                     let y1 = (mid - lo.clamp(-1.0, 1.0) * amp).min(wave.bottom()).max(y0 + 1.0);
-                    mesh.add_colored_rect(Rect::from_min_max(pos2(px as f32, y0), pos2(px as f32 + 1.0, y1)), wave_color);
+                    mesh.add_colored_rect(
+                        Rect::from_min_max(pos2(px as f32, y0), pos2(px as f32 + 1.0, y1)),
+                        wave_color,
+                    );
                 }
             }
-            p.hline(wave.left().max(rect.left())..=wave.right().min(rect.right()), mid, Stroke::new(1.0, color.gamma_multiply(0.3)));
+            p.hline(
+                wave.left().max(rect.left())..=wave.right().min(rect.right()),
+                mid,
+                Stroke::new(1.0, color.gamma_multiply(0.3)),
+            );
             p.add(Shape::mesh(mesh));
         }
     }

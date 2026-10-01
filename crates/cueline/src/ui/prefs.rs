@@ -102,7 +102,11 @@ fn audio_tab(app: &mut CueLineApp, ui: &mut Ui) {
         egui::ComboBox::from_id_salt("device").width(260.0).selected_text(dev_label).show_ui(ui, |ui| {
             ui.selectable_value(&mut p.draft.device, None, "Default output");
             for d in &p.devices {
-                ui.selectable_value(&mut p.draft.device, Some(d.name.clone()), format!("{}  ({} ch)", d.name, d.channels));
+                ui.selectable_value(
+                    &mut p.draft.device,
+                    Some(d.name.clone()),
+                    format!("{}  ({} ch)", d.name, d.channels),
+                );
             }
         });
         ui.end_row();
@@ -155,7 +159,14 @@ fn audio_tab(app: &mut CueLineApp, ui: &mut Ui) {
     });
     match (&app.engine, &app.engine_error) {
         (Some(e), _) => {
-            ui.label(RichText::new(format!("Running: {} — {} @ {} Hz, {} outputs", e.host_name, e.device_name, e.sample_rate, e.channels)).small().color(theme::PLAYING));
+            ui.label(
+                RichText::new(format!(
+                    "Running: {} — {} @ {} Hz, {} outputs",
+                    e.host_name, e.device_name, e.sample_rate, e.channels
+                ))
+                .small()
+                .color(theme::PLAYING),
+            );
         }
         (None, Some(err)) => {
             ui.label(RichText::new(err).small().color(theme::ERROR));
@@ -230,7 +241,9 @@ fn timecode_tab(app: &mut CueLineApp, ui: &mut Ui) {
         ui.end_row();
 
         ui.label("User bits (hex)").on_hover_text("32 user bits carried in every LTC frame");
-        let resp = ui.add(egui::TextEdit::singleline(&mut p.user_bits).font(theme::mono(13.0)).desired_width(160.0).char_limit(8));
+        let resp = ui.add(
+            egui::TextEdit::singleline(&mut p.user_bits).font(theme::mono(13.0)).desired_width(160.0).char_limit(8),
+        );
         if resp.lost_focus() {
             match u32::from_str_radix(p.user_bits.trim(), 16) {
                 Ok(v) => {
@@ -285,7 +298,13 @@ fn midi_tab(app: &mut CueLineApp, ui: &mut Ui) {
 
         ui.label("Offset").on_hover_text("Positive values send MTC earlier to compensate receiver latency");
         changed |= ui
-            .add(egui::DragValue::new(&mut app.project.mtc.offset_ms).range(-200.0..=200.0).speed(0.1).suffix(" ms").fixed_decimals(1))
+            .add(
+                egui::DragValue::new(&mut app.project.mtc.offset_ms)
+                    .range(-200.0..=200.0)
+                    .speed(0.1)
+                    .suffix(" ms")
+                    .fixed_decimals(1),
+            )
             .changed();
         ui.end_row();
     });

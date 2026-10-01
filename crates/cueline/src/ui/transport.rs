@@ -6,8 +6,8 @@ use cueline_core::Timecode;
 use eframe::egui::{self, CornerRadius, RichText, Stroke};
 
 use super::theme;
-use super::{METER_LTC, METER_MASTER_L, METER_MASTER_R};
 use super::widgets::{hmeter, icon_button, status_chip, Icon};
+use super::{METER_LTC, METER_MASTER_L, METER_MASTER_R};
 use crate::app::CueLineApp;
 
 pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
@@ -87,7 +87,12 @@ fn timecode_display(app: &mut CueLineApp, ui: &mut egui::Ui, pos: f64, playing: 
             } else {
                 let color = if playing { theme::PLAYING } else { theme::TEXT };
                 let resp = ui
-                    .add(egui::Label::new(RichText::new(tc.display(rate).to_string()).font(theme::mono(28.0)).color(color)).sense(egui::Sense::click()))
+                    .add(
+                        egui::Label::new(
+                            RichText::new(tc.display(rate).to_string()).font(theme::mono(28.0)).color(color),
+                        )
+                        .sense(egui::Sense::click()),
+                    )
                     .on_hover_text("Click to go to a timecode (G)");
                 if resp.clicked() {
                     app.ui.goto_text = Some(tc.to_string());
@@ -98,7 +103,9 @@ fn timecode_display(app: &mut CueLineApp, ui: &mut egui::Ui, pos: f64, playing: 
                 let sign = if pos < 0.0 { "-" } else { "" };
                 let m = (secs / 60.0).floor();
                 let s = secs - m * 60.0;
-                ui.label(RichText::new(format!("{sign}{m:02}:{s:06.3}")).font(theme::mono(11.5)).color(theme::TEXT_DIM));
+                ui.label(
+                    RichText::new(format!("{sign}{m:02}:{s:06.3}")).font(theme::mono(11.5)).color(theme::TEXT_DIM),
+                );
                 ui.add_space(6.0);
                 ui.label(RichText::new(format!("{} fps", rate.label())).font(theme::mono(11.5)).color(theme::LTC));
                 if rate.is_drop() {
@@ -122,7 +129,8 @@ fn io_status(app: &mut CueLineApp, ui: &mut egui::Ui, playing: bool) {
         "off".into()
     };
     let ltc_active = ltc_on && playing;
-    if status_chip(ui, "LTC", &ltc_detail, ltc_active, theme::LTC).on_hover_text("Click to toggle LTC output").clicked() {
+    if status_chip(ui, "LTC", &ltc_detail, ltc_active, theme::LTC).on_hover_text("Click to toggle LTC output").clicked()
+    {
         app.project.ltc.enabled = !app.project.ltc.enabled;
         app.dirty = true;
         app.apply_project_to_engine();

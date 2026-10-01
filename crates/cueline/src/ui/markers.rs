@@ -29,7 +29,9 @@ pub fn panel(app: &mut CueLineApp, ui: &mut Ui) {
 
     if app.project.markers.is_empty() {
         ui.add_space(12.0);
-        ui.label(RichText::new("No markers yet.\nPress M while playing to drop cues on the fly.").color(theme::TEXT_FAINT));
+        ui.label(
+            RichText::new("No markers yet.\nPress M while playing to drop cues on the fly.").color(theme::TEXT_FAINT),
+        );
         return;
     }
 
@@ -73,22 +75,35 @@ pub fn panel(app: &mut CueLineApp, ui: &mut Ui) {
                                 }
                             }
                         });
-                        ui.label(RichText::new(format!("{:>2}", i + 1)).font(theme::mono(11.0)).color(theme::TEXT_FAINT));
+                        ui.label(
+                            RichText::new(format!("{:>2}", i + 1)).font(theme::mono(11.0)).color(theme::TEXT_FAINT),
+                        );
                         let tc = app.timecode_at(m.time_secs + 1e-6).display(rate).to_string();
                         if ui
-                            .add(egui::Label::new(RichText::new(tc).font(theme::mono(12.0)).color(theme::LTC)).sense(Sense::click()))
+                            .add(
+                                egui::Label::new(RichText::new(tc).font(theme::mono(12.0)).color(theme::LTC))
+                                    .sense(Sense::click()),
+                            )
                             .on_hover_text("Go to marker")
                             .clicked()
                         {
                             goto = Some(i);
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.add(egui::Button::new(RichText::new("×").size(14.0).color(theme::TEXT_DIM)).frame(false)).on_hover_text("Delete marker").clicked() {
+                            if ui
+                                .add(
+                                    egui::Button::new(RichText::new("×").size(14.0).color(theme::TEXT_DIM))
+                                        .frame(false),
+                                )
+                                .on_hover_text("Delete marker")
+                                .clicked()
+                            {
                                 remove = Some(i);
                             }
                             if let Some(n) = next {
                                 let d = n - m.time_secs;
-                                ui.label(RichText::new(format!("{:.1}s", d)).small().color(theme::TEXT_FAINT)).on_hover_text("Time until next marker");
+                                ui.label(RichText::new(format!("{:.1}s", d)).small().color(theme::TEXT_FAINT))
+                                    .on_hover_text("Time until next marker");
                             }
                         });
                     });
@@ -103,7 +118,9 @@ pub fn panel(app: &mut CueLineApp, ui: &mut Ui) {
                         }
                     } else {
                         let name = if m.name.is_empty() { "(unnamed)" } else { m.name.as_str() };
-                        let r = ui.add(egui::Label::new(RichText::new(name).color(theme::TEXT)).truncate().sense(Sense::click()));
+                        let r = ui.add(
+                            egui::Label::new(RichText::new(name).color(theme::TEXT)).truncate().sense(Sense::click()),
+                        );
                         if r.double_clicked() {
                             app.ui.rename_marker = Some((i, m.name.clone()));
                         }
@@ -118,7 +135,12 @@ pub fn panel(app: &mut CueLineApp, ui: &mut Ui) {
                 goto = Some(i);
             }
             if selected {
-                ui.painter().rect_stroke(resp.rect, 3.0, Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)), egui::StrokeKind::Inside);
+                ui.painter().rect_stroke(
+                    resp.rect,
+                    3.0,
+                    Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)),
+                    egui::StrokeKind::Inside,
+                );
             }
         }
     });

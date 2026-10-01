@@ -142,12 +142,7 @@ mod tests {
 
         let mut r = hound::WavReader::open(&path).unwrap();
         assert_eq!(r.spec().channels, 2);
-        let right: Vec<f32> = r
-            .samples::<i32>()
-            .skip(1)
-            .step_by(2)
-            .map(|s| s.unwrap() as f32 / 8_388_607.0)
-            .collect();
+        let right: Vec<f32> = r.samples::<i32>().skip(1).step_by(2).map(|s| s.unwrap() as f32 / 8_388_607.0).collect();
         assert_eq!(right.len(), 96_000);
         let mut dec = LtcDecoder::new(48_000);
         let mut first = None;

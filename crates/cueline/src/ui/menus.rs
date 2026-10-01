@@ -23,7 +23,9 @@ pub fn open_dialog(app: &mut CueLineApp) {
     if !app.confirm_discard() {
         return;
     }
-    if let Some(path) = rfd::FileDialog::new().set_title("Open project").add_filter("CueLine project", &[EXTENSION]).pick_file() {
+    if let Some(path) =
+        rfd::FileDialog::new().set_title("Open project").add_filter("CueLine project", &[EXTENSION]).pick_file()
+    {
         app.open_project(&path);
     }
 }
@@ -41,7 +43,12 @@ pub fn save_as(app: &mut CueLineApp) -> bool {
         .as_ref()
         .and_then(|p| p.file_name())
         .map_or("Untitled.cueline".into(), |n| n.to_string_lossy().into_owned());
-    match rfd::FileDialog::new().set_title("Save project").set_file_name(name).add_filter("CueLine project", &[EXTENSION]).save_file() {
+    match rfd::FileDialog::new()
+        .set_title("Save project")
+        .set_file_name(name)
+        .add_filter("CueLine project", &[EXTENSION])
+        .save_file()
+    {
         Some(mut path) => {
             if path.extension().is_none() {
                 path.set_extension(EXTENSION);
@@ -108,7 +115,8 @@ pub fn menu_bar(app: &mut CueLineApp, ui: &mut Ui) {
                 app.add_marker_at(app.position_secs());
             }
             let sel = app.view.selected_track;
-            if ui.add_enabled(sel.is_some(), egui::Button::new("Remove selected track").shortcut_text("Del")).clicked() {
+            if ui.add_enabled(sel.is_some(), egui::Button::new("Remove selected track").shortcut_text("Del")).clicked()
+            {
                 app.remove_track(sel.unwrap());
             }
             ui.separator();

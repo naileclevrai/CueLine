@@ -38,16 +38,9 @@ pub fn decode_file(path: &Path) -> Result<DecodedAudio, String> {
         .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
         .map_err(|e| format!("unsupported format: {e}"))?;
 
-    let track = format
-        .default_track(TrackType::Audio)
-        .ok_or("no audio track found")?;
+    let track = format.default_track(TrackType::Audio).ok_or("no audio track found")?;
     let track_id = track.id;
-    let params = track
-        .codec_params
-        .as_ref()
-        .and_then(|p| p.audio())
-        .ok_or("track has no audio parameters")?
-        .clone();
+    let params = track.codec_params.as_ref().and_then(|p| p.audio()).ok_or("track has no audio parameters")?.clone();
     let mut decoder = symphonia::default::get_codecs()
         .make_audio_decoder(&params, &AudioDecoderOptions::default())
         .map_err(|e| format!("unsupported codec: {e}"))?;

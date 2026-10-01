@@ -190,8 +190,17 @@ mod tests {
     fn save_load_roundtrip_with_relative_paths() {
         let dir = std::env::temp_dir().join(format!("cueline-test-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("audio")).unwrap();
-        let mut p = Project { frame_rate: FrameRate::Fps29_97Df, start_timecode: Timecode::new(9, 59, 30, 0), ..Default::default() };
-        p.tracks.push(TrackDef { name: "Intro".into(), path: dir.join("audio").join("a.wav"), offset_secs: 1.5, ..Default::default() });
+        let mut p = Project {
+            frame_rate: FrameRate::Fps29_97Df,
+            start_timecode: Timecode::new(9, 59, 30, 0),
+            ..Default::default()
+        };
+        p.tracks.push(TrackDef {
+            name: "Intro".into(),
+            path: dir.join("audio").join("a.wav"),
+            offset_secs: 1.5,
+            ..Default::default()
+        });
         p.markers.push(Marker { name: "Go".into(), time_secs: 12.0, ..Default::default() });
         let file = dir.join("show.cueline");
         p.save(&file).unwrap();

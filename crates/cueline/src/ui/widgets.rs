@@ -54,7 +54,11 @@ pub fn icon_button(ui: &mut Ui, icon: Icon, active: bool, tint: Color32) -> Resp
             let bar_x = c.x + dir * s;
             p.rect_filled(egui::Rect::from_center_size(pos2(bar_x, c.y), vec2(2.5, s * 2.0)), CornerRadius::ZERO, fg);
             p.add(Shape::convex_polygon(
-                vec![pos2(c.x + dir * s * 0.7, c.y), pos2(c.x - dir * s * 0.9, c.y - s), pos2(c.x - dir * s * 0.9, c.y + s)],
+                vec![
+                    pos2(c.x + dir * s * 0.7, c.y),
+                    pos2(c.x - dir * s * 0.9, c.y - s),
+                    pos2(c.x - dir * s * 0.9, c.y + s),
+                ],
                 fg,
                 Stroke::NONE,
             ));

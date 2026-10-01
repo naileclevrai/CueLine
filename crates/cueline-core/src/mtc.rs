@@ -24,18 +24,7 @@ pub fn quarter_frame(piece: u8, tc: Timecode, rate: FrameRate) -> [u8; 2] {
 
 /// Full-frame SysEx (`F0 7F 7F 01 01 hh mm ss ff F7`), sent on locate.
 pub fn full_frame(tc: Timecode, rate: FrameRate) -> [u8; 10] {
-    [
-        0xF0,
-        0x7F,
-        0x7F,
-        0x01,
-        0x01,
-        (rate.mtc_code() << 5) | (tc.hours & 0x1F),
-        tc.minutes,
-        tc.seconds,
-        tc.frames,
-        0xF7,
-    ]
+    [0xF0, 0x7F, 0x7F, 0x01, 0x01, (rate.mtc_code() << 5) | (tc.hours & 0x1F), tc.minutes, tc.seconds, tc.frames, 0xF7]
 }
 
 /// Converts quarter-frame indices on the timeline to MTC messages and times.
