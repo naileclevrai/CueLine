@@ -211,6 +211,11 @@ where
 
         // `process` applies queued commands first, so the buffer just rendered
         // started at `position - frames` when playing.
+        if shared.silent_output.load(Ordering::Relaxed) {
+            for d in data.iter_mut() {
+                *d = T::EQUILIBRIUM;
+            }
+        }
         let playing = mixer.is_playing();
         let start = mixer.position() - if playing { frames as i64 } else { 0 };
         shared.clock.publish(ClockSnapshot {

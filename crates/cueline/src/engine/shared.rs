@@ -72,6 +72,9 @@ pub struct EngineShared {
     pub buffer_frames: AtomicU32,
     pub latency_ns: AtomicU32,
     pub stream_error: AtomicBool,
+    /// Renders and meters normally but sends silence to the device
+    /// (screenshots and automated checks).
+    pub silent_output: AtomicBool,
     pub clock: SharedClock,
 }
 
@@ -92,6 +95,7 @@ impl EngineShared {
             buffer_frames: AtomicU32::new(0),
             latency_ns: AtomicU32::new(0),
             stream_error: AtomicBool::new(false),
+            silent_output: AtomicBool::new(std::env::var_os("CUELINE_SCREENSHOT").is_some() || std::env::var_os("CUELINE_SILENT").is_some()),
             clock: SharedClock::default(),
         })
     }
