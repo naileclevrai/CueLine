@@ -118,6 +118,7 @@ pub struct CueLineApp {
     pub history: History,
     /// When to try re-opening a failed audio device.
     audio_retry_at: Option<std::time::Instant>,
+    devshot: Option<crate::devshot::DevShot>,
 }
 
 impl CueLineApp {
@@ -144,6 +145,7 @@ impl CueLineApp {
             ui: ui::UiState::default(),
             history: History::default(),
             audio_retry_at: None,
+            devshot: crate::devshot::DevShot::from_env(),
         };
         app.restart_audio();
         app.apply_project_to_engine();
@@ -694,6 +696,10 @@ impl eframe::App for CueLineApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll();
         ui::draw(self, ui);
+        if let Some(mut shot) = self.devshot.take() {
+            shot.update(self, ui.ctx());
+            self.devshot = Some(shot);
+        }
         if self.is_playing() {
             ui.ctx().request_repaint();
         }
