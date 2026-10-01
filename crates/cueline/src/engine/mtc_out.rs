@@ -21,6 +21,17 @@ use super::shared::EngineShared;
 
 const SPIN_NS: u64 = 1_200_000;
 
+/// Destination for MIDI bytes; abstracted so scheduling can be tested.
+pub trait MidiSink: Send {
+    fn send(&mut self, bytes: &[u8]) -> Result<(), String>;
+}
+
+impl MidiSink for MidiOutputConnection {
+    fn send(&mut self, bytes: &[u8]) -> Result<(), String> {
+        MidiOutputConnection::send(self, bytes).map_err(|e| e.to_string())
+    }
+}
+
 pub fn list_ports() -> Vec<String> {
     let Ok(out) = MidiOutput::new("CueLine") else { return Vec::new() };
     out.ports().iter().filter_map(|p| out.port_name(p).ok()).collect()
@@ -87,7 +98,7 @@ struct Worker {
     shared: Arc<EngineShared>,
     status: Arc<MtcStatus>,
     rx: Receiver<Msg>,
-    conn: Option<MidiOutputConnection>,
+    conn: Option<Box<dyn MidiSink>>,
     enabled: bool,
     offset_ms: f32,
     seq: MtcSequencer,
@@ -164,7 +175,7 @@ impl Worker {
         })();
         match result {
             Ok(c) => {
-                self.conn = Some(c);
+                self.conn = Some(Box::new(c));
                 self.status.connected.store(true, Ordering::Relaxed);
                 *self.status.error.lock().unwrap() = None;
                 self.parked_at = None;
