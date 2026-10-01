@@ -116,6 +116,8 @@ pub struct CueLineApp {
     pub cursor_secs: f64,
     pub ui: ui::UiState,
     pub history: History,
+    /// When to try re-opening a failed audio device.
+    audio_retry_at: Option<std::time::Instant>,
 }
 
 impl CueLineApp {
@@ -141,6 +143,7 @@ impl CueLineApp {
             cursor_secs: 0.0,
             ui: ui::UiState::default(),
             history: History::default(),
+            audio_retry_at: None,
         };
         app.restart_audio();
         app.apply_project_to_engine();
@@ -313,7 +316,20 @@ impl CueLineApp {
             e.collect_garbage();
         }
         if self.shared.stream_error.swap(false, Ordering::Relaxed) {
-            self.ui.toast_error("Audio device error: the stream was interrupted".into());
+            self.ui.toast_error("Audio device lost — trying to reconnect…".into());
+            self.audio_retry_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(1));
+        }
+        if let Some(at) = self.audio_retry_at {
+            if std::time::Instant::now() >= at {
+                self.restart_audio();
+                if self.engine.is_some() && !self.shared.stream_error.load(Ordering::Relaxed) {
+                    self.audio_retry_at = None;
+                    self.ui.toast_info("Audio device reconnected".into());
+                } else {
+                    self.audio_retry_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(2));
+                }
+            }
+            self.ctx.request_repaint_after(std::time::Duration::from_millis(500));
         }
     }
 
