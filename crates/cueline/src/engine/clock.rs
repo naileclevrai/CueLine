@@ -97,7 +97,7 @@ impl ClockSnapshot {
 }
 
 /// Single-writer seqlock around a [`ClockSnapshot`].
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SharedClock {
     seq: AtomicU64,
     position: AtomicI64,
