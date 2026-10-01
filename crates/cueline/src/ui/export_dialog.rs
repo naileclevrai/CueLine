@@ -9,7 +9,8 @@ use std::thread::JoinHandle;
 use cueline_core::Timecode;
 use eframe::egui::{self, RichText};
 
-use super::theme;
+use super::sheet::{self, footnote, group, row, row_separator};
+use super::{fonts, theme};
 use crate::app::{db_to_gain, CueLineApp};
 use crate::engine::atomic::AtomicF32;
 use crate::engine::shared::{RtTrack, TrackParams};
@@ -57,13 +58,7 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
         app.ui.export.initialised = true;
     }
     let mut open = true;
-    egui::Window::new("Export WAV")
-        .open(&mut open)
-        .collapsible(false)
-        .resizable(false)
-        .default_width(380.0)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .show(ctx, |ui| contents(app, ui));
+    sheet::show(ctx, "Export Audio", &mut open, 440.0, |ui| contents(app, ui));
     if !open && app.ui.export.running.is_none() {
         app.ui.export.open = false;
     }
@@ -73,58 +68,72 @@ fn contents(app: &mut CueLineApp, ui: &mut egui::Ui) {
     let rate = app.project.frame_rate;
     if let Some(r) = &app.ui.export.running {
         let p = r.progress.load();
-        ui.label(format!("Rendering {}", r.path.display()));
-        ui.add(egui::ProgressBar::new(p).show_percentage());
-        if ui.button("Cancel").clicked() {
-            r.cancel.store(true, Ordering::Relaxed);
-        }
+        let name = r.path.file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned());
+        ui.label(RichText::new(format!("Rendering “{name}”…")).font(fonts::medium(13.0)).color(theme::TEXT));
+        ui.add_space(6.0);
+        ui.add(egui::ProgressBar::new(p).desired_height(6.0).fill(theme::BLUE).corner_radius(3));
+        ui.add_space(2.0);
+        footnote(ui, &format!("{:.0} %", p * 100.0));
+        ui.add_space(8.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if sheet::button(ui, "Cancel").clicked() {
+                r.cancel.store(true, Ordering::Relaxed);
+            }
+        });
         ui.ctx().request_repaint();
         return;
     }
 
-    egui::Grid::new("export").num_columns(2).spacing([16.0, 8.0]).show(ui, |ui| {
+    group(ui, |ui| {
         let e = &mut app.ui.export;
-        ui.label("Content");
-        egui::ComboBox::from_id_salt("kind").width(220.0).selected_text(e.kind.label()).show_ui(ui, |ui| {
-            for k in ExportKind::ALL {
-                ui.selectable_value(&mut e.kind, k, k.label());
-            }
+        row(ui, "Content", |ui| {
+            egui::ComboBox::from_id_salt("kind").width(220.0).selected_text(e.kind.label()).show_ui(ui, |ui| {
+                for k in ExportKind::ALL {
+                    ui.selectable_value(&mut e.kind, k, k.label());
+                }
+            });
         });
-        ui.end_row();
-        ui.label("From");
-        ui.add(egui::TextEdit::singleline(&mut e.from).font(theme::mono(13.0)).desired_width(120.0));
-        ui.end_row();
-        ui.label("To");
-        ui.add(egui::TextEdit::singleline(&mut e.to).font(theme::mono(13.0)).desired_width(120.0));
-        ui.end_row();
+        row_separator(ui);
+        row(ui, "Start", |ui| {
+            ui.add(egui::TextEdit::singleline(&mut e.from).font(fonts::mono(13.0)).desired_width(130.0));
+        });
+        row_separator(ui);
+        row(ui, "End", |ui| {
+            ui.add(egui::TextEdit::singleline(&mut e.to).font(fonts::mono(13.0)).desired_width(130.0));
+        });
     });
+    ui.add_space(6.0);
     ui.horizontal(|ui| {
-        if ui.small_button("Whole project").clicked() {
+        if sheet::button(ui, "Whole Project").clicked() {
             let end = app.project_end_secs().max(1.0);
             app.ui.export.from = app.timecode_at(0.0).to_string();
             app.ui.export.to = app.timecode_at(end).to_string();
         }
         let markers = &app.project.markers;
-        if markers.len() >= 2 && ui.small_button("First → last marker").clicked() {
+        if markers.len() >= 2 && sheet::button(ui, "First → Last Cue").clicked() {
             let (a, b) = (markers[0].time_secs, markers[markers.len() - 1].time_secs);
             app.ui.export.from = app.timecode_at(a + 1e-6).to_string();
             app.ui.export.to = app.timecode_at(b + 1e-6).to_string();
         }
     });
-    ui.label(
-        RichText::new(format!(
-            "24-bit WAV at {} Hz, {} fps LTC at {:.1} dBFS.",
-            app.sample_rate(),
+    footnote(
+        ui,
+        &format!(
+            "24-bit WAV · {:.1} kHz · {} fps LTC at {:.1} dBFS, rendered by the playback engine.",
+            app.sample_rate() as f32 / 1000.0,
             rate.label(),
             app.project.ltc.level_db
-        ))
-        .small()
-        .color(theme::TEXT_DIM),
+        ),
     );
-    ui.add_space(6.0);
-    if ui.button("Export…").clicked() {
-        start(app);
-    }
+    ui.add_space(10.0);
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if sheet::primary_button(ui, "Export…", true).clicked() {
+            start(app);
+        }
+        if sheet::button(ui, "Cancel").clicked() {
+            app.ui.export.open = false;
+        }
+    });
 }
 
 fn secs_of(app: &CueLineApp, text: &str) -> Option<f64> {
