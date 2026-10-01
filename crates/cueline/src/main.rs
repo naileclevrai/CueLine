@@ -22,6 +22,8 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_active(!background)
+            .with_decorations(false)
+            .with_resizable(true)
             .with_title("CueLine")
             .with_inner_size([1280.0, 760.0])
             .with_min_inner_size([820.0, 480.0])

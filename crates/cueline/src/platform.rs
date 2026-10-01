@@ -41,3 +41,22 @@ pub fn promote_timing_thread() {
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
     }
 }
+
+/// Asks Windows 11 to round the corners of this thread's top-level windows
+/// (the main window is frameless, so DWM would otherwise square them).
+pub fn round_window_corners() {
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::Foundation::{HWND, LPARAM};
+        use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND};
+        use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+        use windows_sys::Win32::UI::WindowsAndMessaging::EnumThreadWindows;
+
+        unsafe extern "system" fn apply(hwnd: HWND, _: LPARAM) -> windows_sys::core::BOOL {
+            let pref = DWMWCP_ROUND;
+            DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE as u32, &pref as *const _ as *const _, 4);
+            1
+        }
+        EnumThreadWindows(GetCurrentThreadId(), Some(apply), 0);
+    }
+}
