@@ -85,3 +85,116 @@ const fn polarity_bit(rate: FrameRate) -> usize {
         _ => 27,
     }
 }
+
+/// Real-time LTC signal generator.
+///
+/// `render` maps every output sample to its timeline position, so the
+/// generated signal is sample-accurate and stays correct across seeks,
+/// loops and buffer-size changes. It never allocates.
+pub struct LtcGenerator {
+    sample_rate: u32,
+    rate: FrameRate,
+    /// Label frame count at timeline sample 0 (the project start timecode).
+    start_frames: i64,
+    user_bits: u32,
+    amplitude: f32,
+    /// One-pole low-pass coefficient giving the SMPTE ~25 µs rise time.
+    alpha: f32,
+    smoothed: f32,
+    cached_frame: i64,
+    levels: [bool; 160],
+}
+
+impl LtcGenerator {
+    pub fn new(sample_rate: u32, rate: FrameRate) -> Self {
+        let tau = 25e-6 / 2.197; // 10%-90% rise time of a one-pole filter
+        let alpha = 1.0 - (-1.0 / (sample_rate as f64 * tau)).exp();
+        Self {
+            sample_rate,
+            rate,
+            start_frames: 0,
+            user_bits: 0,
+            amplitude: 0.25,
+            alpha: alpha as f32,
+            smoothed: 0.0,
+            cached_frame: i64::MIN,
+            levels: [false; 160],
+        }
+    }
+
+    pub fn set_rate(&mut self, rate: FrameRate) {
+        if rate != self.rate {
+            self.rate = rate;
+            self.cached_frame = i64::MIN;
+        }
+    }
+
+    pub fn set_start_frames(&mut self, frames: i64) {
+        if frames != self.start_frames {
+            self.start_frames = frames;
+            self.cached_frame = i64::MIN;
+        }
+    }
+
+    pub fn set_user_bits(&mut self, bits: u32) {
+        if bits != self.user_bits {
+            self.user_bits = bits;
+            self.cached_frame = i64::MIN;
+        }
+    }
+
+    /// Peak amplitude, linear (1.0 = 0 dBFS).
+    pub fn set_amplitude(&mut self, amplitude: f32) {
+        self.amplitude = amplitude;
+    }
+
+    pub fn rate(&self) -> FrameRate {
+        self.rate
+    }
+
+    /// Timecode label carried by timeline frame `frame`.
+    pub fn timecode_at_frame(&self, frame: i64) -> Timecode {
+        Timecode::from_frames(self.start_frames + frame, self.rate)
+    }
+
+    /// Writes the LTC signal for timeline samples `start..start + out.len()`.
+    pub fn render(&mut self, start: i64, out: &mut [f32]) {
+        let (n, d) = self.rate.ratio();
+        let den = self.sample_rate as i64 * d as i64;
+        let mut num = start * n as i64;
+        for o in out.iter_mut() {
+            let frame = num.div_euclid(den);
+            let half = ((num - frame * den) * 160 / den) as usize;
+            if frame != self.cached_frame {
+                self.load_frame(frame);
+            }
+            let target = if self.levels[half] { self.amplitude } else { -self.amplitude };
+            self.smoothed += self.alpha * (target - self.smoothed);
+            *o = self.smoothed;
+            num += n as i64;
+        }
+    }
+
+    /// Lets the output settle to silence instead of clicking when stopping.
+    pub fn render_silence(&mut self, out: &mut [f32]) {
+        for o in out.iter_mut() {
+            self.smoothed -= self.alpha * self.smoothed;
+            *o = self.smoothed;
+        }
+    }
+
+    fn load_frame(&mut self, frame: i64) {
+        let bits = LtcFrame::encode(self.timecode_at_frame(frame), self.rate, self.user_bits);
+        let mut level = false;
+        for b in 0..80 {
+            level = !level;
+            self.levels[2 * b] = level;
+            if bits.bit(b) {
+                level = !level;
+            }
+            self.levels[2 * b + 1] = level;
+        }
+        debug_assert!(!level, "polarity correction must restore the start level");
+        self.cached_frame = frame;
+    }
+}
