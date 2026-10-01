@@ -4,3 +4,8 @@
 .vscode/
 .idea/
 *.cueline.bak
+
+# Apple fonts are licensed for local use only: never commit them.
+SF-*.otf
+SF-*.ttf
+SFMono*
