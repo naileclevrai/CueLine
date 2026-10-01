@@ -9,7 +9,7 @@ use crate::engine::device::AudioConfig;
 
 const MAX_RECENT: usize = 10;
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub audio: AudioConfig,
@@ -18,6 +18,18 @@ pub struct Settings {
     pub snap_to_frames: bool,
     /// Stop the transport when the playhead passes the last clip or marker.
     pub stop_at_end: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            audio: AudioConfig::default(),
+            recent: Vec::new(),
+            follow_playhead: true,
+            snap_to_frames: true,
+            stop_at_end: false,
+        }
+    }
 }
 
 fn settings_path() -> Option<PathBuf> {
@@ -30,11 +42,10 @@ fn settings_path() -> Option<PathBuf> {
 
 impl Settings {
     pub fn load() -> Self {
-        let defaults = Self { follow_playhead: true, snap_to_frames: true, ..Default::default() };
         settings_path()
             .and_then(|p| std::fs::read_to_string(p).ok())
             .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or(defaults)
+            .unwrap_or_default()
     }
 
     pub fn save(&self) {
