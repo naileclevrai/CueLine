@@ -64,7 +64,7 @@ fn timecode_display(app: &mut CueLineApp, ui: &mut egui::Ui, pos: f64, playing: 
             if let Some(text) = &mut app.ui.goto_text {
                 let edit = ui.add(
                     egui::TextEdit::singleline(text)
-                        .font(theme::mono(30.0))
+                        .font(theme::mono(28.0))
                         .desired_width(230.0)
                         .frame(egui::Frame::NONE)
                         .hint_text("HH:MM:SS:FF"),
@@ -87,7 +87,7 @@ fn timecode_display(app: &mut CueLineApp, ui: &mut egui::Ui, pos: f64, playing: 
             } else {
                 let color = if playing { theme::PLAYING } else { theme::TEXT };
                 let resp = ui
-                    .add(egui::Label::new(RichText::new(tc.display(rate).to_string()).font(theme::mono(30.0)).color(color)).sense(egui::Sense::click()))
+                    .add(egui::Label::new(RichText::new(tc.display(rate).to_string()).font(theme::mono(28.0)).color(color)).sense(egui::Sense::click()))
                     .on_hover_text("Click to go to a timecode (G)");
                 if resp.clicked() {
                     app.ui.goto_text = Some(tc.to_string());

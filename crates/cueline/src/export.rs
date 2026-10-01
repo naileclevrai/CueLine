@@ -5,7 +5,6 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 use cueline_core::FrameRate;
 use rtrb::RingBuffer;
