@@ -207,7 +207,10 @@ fn paint_ruler(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
         let selected = app.view.selected_marker == Some(i);
         let label = if m.name.is_empty() { format!("{}", i + 1) } else { format!("{}   {}", i + 1, m.name) };
         let galley = p.layout_no_wrap(label, flag_font.clone(), Color32::BLACK);
-        let flag = Rect::from_min_size(pos2(x, marker_lane.top() + 3.0), vec2(galley.size().x + 12.0, MARKER_H - 6.0));
+        // Never run into the next flag: truncate the label instead.
+        let room = app.project.markers.get(i + 1).map_or(f32::INFINITY, |n| map.x(n.time_secs).round() - x - 2.0);
+        let width = (galley.size().x + 12.0).min(room).max(14.0);
+        let flag = Rect::from_min_size(pos2(x, marker_lane.top() + 3.0), vec2(width, MARKER_H - 6.0));
         p.rect_filled(flag, CornerRadius { nw: 0, ne: 5, sw: 0, se: 5 }, color);
         if selected {
             p.rect_stroke(
@@ -217,7 +220,7 @@ fn paint_ruler(app: &CueLineApp, p: &egui::Painter, rect: Rect, map: Map) {
                 StrokeKind::Inside,
             );
         }
-        p.galley(
+        p.with_clip_rect(p.clip_rect().intersect(flag.shrink2(vec2(3.0, 0.0)))).galley(
             pos2(flag.left() + 6.0, flag.center().y - galley.size().y / 2.0),
             galley,
             Color32::from_rgb(0x14, 0x14, 0x16),
