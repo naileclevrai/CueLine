@@ -198,3 +198,81 @@ impl LtcGenerator {
         self.cached_frame = frame;
     }
 }
+
+/// A frame recovered by [`LtcDecoder`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DecodedFrame {
+    pub frame: LtcFrame,
+    /// Index (in samples fed so far) of the edge that ended the sync word.
+    pub end_sample: u64,
+}
+
+/// Biphase-mark LTC decoder. Tolerates any polarity, sample rate and
+/// frame rate from 23.976 to 30 fps.
+pub struct LtcDecoder {
+    sample_rate: u32,
+    high: bool,
+    since_edge: u32,
+    bit_period: f32,
+    half_pending: bool,
+    window: u128,
+    samples: u64,
+    threshold: f32,
+}
+
+impl LtcDecoder {
+    pub fn new(sample_rate: u32) -> Self {
+        Self {
+            sample_rate,
+            high: false,
+            since_edge: 0,
+            bit_period: sample_rate as f32 / (27.0 * 80.0),
+            half_pending: false,
+            window: 0,
+            samples: 0,
+            threshold: 0.02,
+        }
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    pub fn feed(&mut self, input: &[f32], mut on_frame: impl FnMut(DecodedFrame)) {
+        for &s in input {
+            self.samples += 1;
+            self.since_edge += 1;
+            let edge = if self.high { s < -self.threshold } else { s > self.threshold };
+            if !edge {
+                continue;
+            }
+            self.high = !self.high;
+            let interval = self.since_edge as f32;
+            self.since_edge = 0;
+
+            if interval > self.bit_period * 1.6 || interval < self.bit_period * 0.3 {
+                // Signal dropout or noise: resynchronise on the next frame.
+                self.half_pending = false;
+                self.bit_period = self.bit_period * 0.5 + interval.clamp(5.0, 100.0) * 0.25;
+                continue;
+            }
+            let bit = if interval > self.bit_period * 0.75 {
+                self.half_pending = false;
+                self.bit_period += (interval - self.bit_period) * 0.1;
+                false
+            } else if self.half_pending {
+                self.half_pending = false;
+                true
+            } else {
+                self.half_pending = true;
+                self.bit_period += (interval * 2.0 - self.bit_period) * 0.1;
+                continue;
+            };
+            self.window = (self.window >> 1) | ((bit as u128) << 79);
+            let frame = LtcFrame(self.window);
+            if frame.sync_ok() {
+                on_frame(DecodedFrame { frame, end_sample: self.samples - 1 });
+            }
+        }
+    }
+}
