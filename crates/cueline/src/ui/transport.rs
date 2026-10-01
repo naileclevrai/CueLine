@@ -16,6 +16,7 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
         timecode_display(app, ui, pos, playing);
+        next_cue(app, ui, pos);
         ui.add_space(8.0);
 
         if icon_button(ui, Icon::ToStart, false, theme::TEXT).on_hover_text("Go to start (Home)").clicked() {
@@ -116,6 +117,36 @@ fn timecode_display(app: &mut CueLineApp, ui: &mut egui::Ui, pos: f64, playing: 
     });
 }
 
+/// Name of the next marker and a countdown to it.
+fn next_cue(app: &CueLineApp, ui: &mut egui::Ui, pos: f64) {
+    let next = app.project.markers.iter().enumerate().find(|(_, m)| m.time_secs > pos + 1e-4);
+    let frame = egui::Frame::new()
+        .fill(theme::BG_DEEP)
+        .stroke(Stroke::new(1.0, theme::BORDER))
+        .corner_radius(CornerRadius::same(4))
+        .inner_margin(egui::Margin { left: 10, right: 10, top: 5, bottom: 5 });
+    frame.show(ui, |ui| {
+        ui.set_min_width(130.0);
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 1.0;
+            match next {
+                Some((i, m)) => {
+                    let name = if m.name.is_empty() { format!("Marker {}", i + 1) } else { m.name.clone() };
+                    ui.label(RichText::new(format!("NEXT · {}", name)).small().color(theme::rgb(m.color)));
+                    let left = m.time_secs - pos;
+                    let mins = (left / 60.0).floor();
+                    let secs = left - mins * 60.0;
+                    ui.label(RichText::new(format!("-{mins:02}:{secs:04.1}")).font(theme::mono(19.0)).color(theme::TEXT));
+                }
+                None => {
+                    ui.label(RichText::new("NEXT").small().color(theme::TEXT_FAINT));
+                    ui.label(RichText::new("--:--.-").font(theme::mono(19.0)).color(theme::TEXT_FAINT));
+                }
+            }
+        });
+    });
+}
+
 fn io_status(app: &mut CueLineApp, ui: &mut egui::Ui, playing: bool) {
     let sh = app.shared.clone();
     let channels = app.output_channels() as i32;
@@ -165,13 +196,25 @@ fn io_status(app: &mut CueLineApp, ui: &mut egui::Ui, playing: bool) {
                 let load = sh.dsp_load.load() * 100.0;
                 let buf = sh.buffer_frames.load(Ordering::Relaxed);
                 let lat = sh.latency_ns.load(Ordering::Relaxed) as f32 / 1e6;
-                ui.label(
-                    RichText::new(format!("{} Hz · {buf} smp · {lat:.1} ms · DSP {load:.0}%", e.sample_rate))
-                        .font(theme::mono(11.0))
-                        .color(if load > 70.0 { theme::WARN } else { theme::TEXT_DIM }),
+                let details = format!(
+                    "{} — {}
+{} Hz · {buf} samples · output latency {lat:.1} ms · DSP load {load:.0}%",
+                    e.host_name, e.device_name, e.sample_rate
                 );
-                ui.label(RichText::new(short(&e.device_name, 28)).color(theme::TEXT_DIM))
-                    .on_hover_text(format!("{} — {}", e.host_name, e.device_name));
+                let color = if load > 70.0 { theme::WARN } else { theme::TEXT_DIM };
+                // Degrade gracefully on narrow windows instead of overlapping.
+                let room = ui.available_width();
+                let stats = if room > 420.0 {
+                    format!("{} Hz · {buf} smp · {lat:.1} ms · DSP {load:.0}%", e.sample_rate)
+                } else {
+                    format!("{}k · DSP {load:.0}%", e.sample_rate / 1000)
+                };
+                if room > 150.0 {
+                    ui.label(RichText::new(stats).font(theme::mono(11.0)).color(color)).on_hover_text(&details);
+                }
+                if ui.available_width() > 190.0 {
+                    ui.label(RichText::new(short(&e.device_name, 28)).color(theme::TEXT_DIM)).on_hover_text(&details);
+                }
             }
             None => {
                 ui.label(RichText::new("No audio device").color(theme::ERROR))
