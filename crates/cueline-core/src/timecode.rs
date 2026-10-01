@@ -106,3 +106,64 @@ impl fmt::Display for Timecode {
         write!(f, "{:02}:{:02}:{:02}:{:02}", self.hours, self.minutes, self.seconds, self.frames)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_drop_roundtrip() {
+        for rate in [FrameRate::Fps24, FrameRate::Fps25, FrameRate::Fps30] {
+            for n in (0..rate.frames_per_day()).step_by(997) {
+                let tc = Timecode::from_frames(n, rate);
+                assert!(tc.is_valid(rate));
+                assert_eq!(tc.to_frames(rate), n);
+            }
+        }
+    }
+
+    #[test]
+    fn drop_frame_roundtrip_every_frame_of_first_hour() {
+        let rate = FrameRate::Fps29_97Df;
+        let mut prev: Option<Timecode> = None;
+        for n in 0..107_892 {
+            let tc = Timecode::from_frames(n, rate);
+            assert!(tc.is_valid(rate), "{tc} invalid at {n}");
+            assert_eq!(tc.to_frames(rate), n);
+            if let Some(p) = prev {
+                assert_ne!(p, tc);
+            }
+            prev = Some(tc);
+        }
+        assert_eq!(Timecode::from_frames(107_892, rate), Timecode::new(1, 0, 0, 0));
+    }
+
+    #[test]
+    fn drop_frame_skips_labels() {
+        let r = FrameRate::Fps29_97Df;
+        assert_eq!(Timecode::from_frames(1799, r), Timecode::new(0, 0, 59, 29));
+        assert_eq!(Timecode::from_frames(1800, r), Timecode::new(0, 1, 0, 2));
+        assert_eq!(Timecode::from_frames(17_982, r), Timecode::new(0, 10, 0, 0));
+        assert!(!Timecode::new(0, 1, 0, 0).is_valid(r));
+        assert!(Timecode::new(0, 10, 0, 0).is_valid(r));
+    }
+
+    #[test]
+    fn wraps_at_24h() {
+        let r = FrameRate::Fps25;
+        assert_eq!(Timecode::from_frames(r.frames_per_day(), r), Timecode::default());
+        assert_eq!(Timecode::from_frames(-1, r), Timecode::new(23, 59, 59, 24));
+    }
+
+    #[test]
+    fn parse_and_display() {
+        let r = FrameRate::Fps25;
+        assert_eq!(Timecode::parse("01:02:03:04", r), Some(Timecode::new(1, 2, 3, 4)));
+        assert_eq!(Timecode::parse("10:00:00", r), Some(Timecode::new(0, 10, 0, 0)));
+        assert_eq!(Timecode::parse("1.12", r), Some(Timecode::new(0, 0, 1, 12)));
+        assert_eq!(Timecode::parse("00:00:00:25", r), None);
+        assert_eq!(Timecode::parse("abc", r), None);
+        let df = FrameRate::Fps29_97Df;
+        assert_eq!(Timecode::new(1, 2, 3, 4).display(df).to_string(), "01:02:03;04");
+    }
+}
