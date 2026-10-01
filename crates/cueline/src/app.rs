@@ -28,14 +28,6 @@ pub fn db_to_gain(db: f32) -> f32 {
     }
 }
 
-pub fn gain_to_db(g: f32) -> f32 {
-    if g <= 0.0 {
-        -f32::INFINITY
-    } else {
-        20.0 * g.log10()
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum TrackState {
     Loading,
@@ -239,7 +231,7 @@ impl CueLineApp {
         for t in &self.tracks {
             Self::store_params(t, sr);
         }
-        self.send(Command::SetTracks(Box::new(list)));
+        self.send(Command::SetTracks(list));
     }
 
     fn store_params(t: &Track, sr: u32) {

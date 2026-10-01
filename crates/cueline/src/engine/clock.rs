@@ -34,11 +34,6 @@ impl Dll {
         Self { bandwidth_hz: 0.2, t0: 0.0, sps, nominal_sps: sps, ready: false }
     }
 
-    pub fn reset(&mut self) {
-        self.ready = false;
-        self.sps = self.nominal_sps;
-    }
-
     /// Feeds the raw time (seconds) of a callback whose buffer starts
     /// `prev_frames` samples after the previous one. Returns the filtered
     /// time of this buffer's first sample.

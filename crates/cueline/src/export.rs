@@ -80,7 +80,7 @@ pub fn run(job: ExportJob, progress: &AtomicF32, cancel: &AtomicBool) -> Result<
     let (gb_tx, _gb_rx) = RingBuffer::new(8);
     let mut mixer = Mixer::new(shared, rx, gb_tx, job.sample_rate, job.start);
     let _ = tx.push(Command::SetTimecode { rate: job.rate, start_frames: job.start_frames, user_bits: job.user_bits });
-    let _ = tx.push(Command::SetTracks(Box::new(job.tracks)));
+    let _ = tx.push(Command::SetTracks(job.tracks));
     let _ = tx.push(Command::Play);
 
     let spec = hound::WavSpec {

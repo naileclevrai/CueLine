@@ -35,9 +35,6 @@ impl AtomicF32 {
 pub struct AtomicF64(AtomicU64);
 
 impl AtomicF64 {
-    pub fn new(v: f64) -> Self {
-        Self(AtomicU64::new(v.to_bits()))
-    }
     pub fn load(&self) -> f64 {
         f64::from_bits(self.0.load(Ordering::Relaxed))
     }

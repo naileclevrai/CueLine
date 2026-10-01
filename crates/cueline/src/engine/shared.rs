@@ -107,6 +107,6 @@ pub enum Command {
     Play,
     Pause,
     Seek(i64),
-    SetTracks(Box<Vec<RtTrack>>),
+    SetTracks(Vec<RtTrack>),
     SetTimecode { rate: FrameRate, start_frames: i64, user_bits: u32 },
 }

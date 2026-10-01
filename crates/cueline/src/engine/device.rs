@@ -69,10 +69,9 @@ pub fn list_output_devices(host: Option<&str>) -> Vec<DeviceInfo> {
 
 /// A running output stream plus the UI-side ends of its queues.
 pub struct AudioEngine {
-    pub shared: Arc<EngineShared>,
     _stream: cpal::Stream,
     commands: Producer<Command>,
-    garbage: Consumer<Box<Vec<RtTrack>>>,
+    garbage: Consumer<Vec<RtTrack>>,
     pub host_name: String,
     pub device_name: String,
     pub sample_rate: u32,
@@ -93,7 +92,7 @@ impl AudioEngine {
         .ok_or("no audio output device available")?;
 
         let default = device.default_output_config().map_err(|e| e.to_string())?;
-        let mut supported = default.clone();
+        let mut supported = default;
         if let Some(rate) = cfg.sample_rate.filter(|r| *r != default.sample_rate()) {
             let found = device
                 .supported_output_configs()
@@ -140,7 +139,6 @@ impl AudioEngine {
         stream.play().map_err(|e| e.to_string())?;
 
         Ok(Self {
-            shared,
             _stream: stream,
             commands: cmd_tx,
             garbage: gb_rx,
@@ -232,6 +230,6 @@ where
         err_shared.stream_error.store(true, Ordering::Relaxed);
     };
     device
-        .build_output_stream::<T, _, _>(config.clone(), data_cb, err_cb, None)
+        .build_output_stream::<T, _, _>(*config, data_cb, err_cb, None)
         .map_err(|e| e.to_string())
 }

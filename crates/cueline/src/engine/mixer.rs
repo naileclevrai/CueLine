@@ -18,8 +18,8 @@ pub struct Mixer {
     shared: Arc<EngineShared>,
     commands: Consumer<Command>,
     /// Track lists replaced by `SetTracks` go back to the UI thread to be freed.
-    garbage: Producer<Box<Vec<RtTrack>>>,
-    tracks: Box<Vec<RtTrack>>,
+    garbage: Producer<Vec<RtTrack>>,
+    tracks: Vec<RtTrack>,
     ltc: LtcGenerator,
     position: i64,
     playing: bool,
@@ -32,7 +32,7 @@ impl Mixer {
     pub fn new(
         shared: Arc<EngineShared>,
         commands: Consumer<Command>,
-        garbage: Producer<Box<Vec<RtTrack>>>,
+        garbage: Producer<Vec<RtTrack>>,
         sample_rate: u32,
         position: i64,
     ) -> Self {
@@ -40,7 +40,7 @@ impl Mixer {
             shared,
             commands,
             garbage,
-            tracks: Box::default(),
+            tracks: Vec::new(),
             ltc: LtcGenerator::new(sample_rate, FrameRate::default()),
             position,
             playing: false,
@@ -253,7 +253,7 @@ mod tests {
         let (mut m, mut tx, sh) = setup();
         sh.ltc_enabled.store(false, Ordering::Relaxed);
         sh.main_right.store(1, Ordering::Relaxed);
-        tx.push(Command::SetTracks(Box::new(vec![track(0.5, 100, 1000)]))).ok();
+        tx.push(Command::SetTracks(vec![track(0.5, 100, 1000)])).ok();
         tx.push(Command::Play).ok();
         let mut out = vec![0.0; 2 * 2048];
         m.process(&mut out, 2);
@@ -272,7 +272,7 @@ mod tests {
         let a = track(0.25, 4096, 0);
         let b = track(0.5, 4096, 0);
         b.params.solo.store(true, Ordering::Relaxed);
-        tx.push(Command::SetTracks(Box::new(vec![a.clone(), b.clone()]))).ok();
+        tx.push(Command::SetTracks(vec![a.clone(), b.clone()])).ok();
         tx.push(Command::Play).ok();
         let mut out = vec![0.0; 2 * 64];
         m.process(&mut out, 2);
@@ -309,7 +309,7 @@ mod tests {
     fn pause_fades_then_stops() {
         let (mut m, mut tx, sh) = setup();
         sh.ltc_enabled.store(false, Ordering::Relaxed);
-        tx.push(Command::SetTracks(Box::new(vec![track(1.0, 48_000, 0)]))).ok();
+        tx.push(Command::SetTracks(vec![track(1.0, 48_000, 0)])).ok();
         tx.push(Command::Play).ok();
         let mut out = vec![0.0; 2 * 128];
         m.process(&mut out, 2);
