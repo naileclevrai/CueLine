@@ -34,7 +34,12 @@ impl MidiSink for MidiOutputConnection {
 
 pub fn list_ports() -> Vec<String> {
     let Ok(out) = MidiOutput::new("CueLine") else { return Vec::new() };
-    out.ports().iter().filter_map(|p| out.port_name(p).ok()).collect()
+    out.ports()
+        .iter()
+        .filter_map(|p| out.port_name(p).ok())
+        // Windows' built-in General MIDI synth cannot receive timecode.
+        .filter(|n| !n.contains("GS Wavetable"))
+        .collect()
 }
 
 enum Msg {
