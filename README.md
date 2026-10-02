@@ -77,7 +77,11 @@ runtime or plug-ins, and it is built around one goal: **the timecode is exactly 
 
 ### ✨ Pro comfort
 - **Big timecode window** for a second screen at FOH or on stage.
-- **Offline 24-bit WAV export**, bit-identical to live playback.
+- **Export to WAV, AIFF, FLAC, MP3 and Ogg Vorbis** (16/24/32-bit, 44.1–192 kHz, LTC re-synthesised
+  at the target rate), plus Opus and AAC when ffmpeg is installed.
+- **Import almost anything**: WAV, AIFF, CAF, FLAC, MP3, AAC/M4A, ALAC, Ogg, the audio of MP4/MOV/MKV/WebM
+  videos, and with ffmpeg Opus, WMA, AC-3 and more. Cue lists come in from **CSV, MIDI files or WAV
+  markers** (Reaper, BWF).
 - Undo/redo, drag & drop, Reaper-style shortcuts, and a native-feeling dark interface.
 
 </td>
