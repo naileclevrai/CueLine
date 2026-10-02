@@ -121,7 +121,77 @@ impl Default for Marker {
     }
 }
 
+/// The three output layouts that cover almost every timecode rig.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputLayout {
+    /// Program in stereo on outputs 1-2, no LTC (use MTC to sync).
+    Stereo,
+    /// Program summed to mono on output 1, LTC on output 2.
+    MonoPlusLtc,
+    /// Program in stereo on outputs 1-2, LTC on output 3.
+    StereoPlusLtc,
+}
+
+impl OutputLayout {
+    pub const ALL: [OutputLayout; 3] = [OutputLayout::Stereo, OutputLayout::MonoPlusLtc, OutputLayout::StereoPlusLtc];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            OutputLayout::Stereo => "Stereo music",
+            OutputLayout::MonoPlusLtc => "Music + LTC",
+            OutputLayout::StereoPlusLtc => "Stereo music + LTC",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            OutputLayout::Stereo => "Music on outputs 1–2. No LTC: sync over MIDI Timecode.",
+            OutputLayout::MonoPlusLtc => "Music in mono on output 1, LTC on output 2. Works with any stereo interface.",
+            OutputLayout::StereoPlusLtc => "Music on outputs 1–2, LTC on output 3. Needs an interface with 3+ outputs.",
+        }
+    }
+
+    /// Minimum number of device outputs the layout needs.
+    pub fn outputs_needed(self) -> u16 {
+        match self {
+            OutputLayout::Stereo | OutputLayout::MonoPlusLtc => 2,
+            OutputLayout::StereoPlusLtc => 3,
+        }
+    }
+
+    /// Best default for a device with `outputs` channels.
+    pub fn default_for(outputs: u16) -> Self {
+        if outputs >= 3 {
+            OutputLayout::StereoPlusLtc
+        } else {
+            OutputLayout::Stereo
+        }
+    }
+}
+
 impl Project {
+    /// Applies an output layout to the routing and LTC settings.
+    pub fn apply_layout(&mut self, layout: OutputLayout) {
+        let (l, r, ltc) = match layout {
+            OutputLayout::Stereo => (0, 1, None),
+            OutputLayout::MonoPlusLtc => (0, -1, Some(1)),
+            OutputLayout::StereoPlusLtc => (0, 1, Some(2)),
+        };
+        self.routing = Routing { main_left: l, main_right: r };
+        self.ltc.enabled = ltc.is_some();
+        self.ltc.channel = ltc.unwrap_or(-1);
+    }
+
+    /// The layout the current routing corresponds to, if any.
+    pub fn layout(&self) -> Option<OutputLayout> {
+        OutputLayout::ALL.into_iter().find(|l| {
+            let mut probe = self.clone();
+            probe.apply_layout(*l);
+            probe.routing == self.routing
+                && probe.ltc.channel == if self.ltc.enabled { self.ltc.channel } else { -1 }
+                && probe.ltc.enabled == self.ltc.enabled
+        })
+    }
     pub fn start_frames(&self) -> i64 {
         self.start_timecode.to_frames(self.frame_rate)
     }
@@ -213,6 +283,22 @@ mod tests {
         let back = Project::load(&file).unwrap();
         assert_eq!(back, p);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn output_layouts_roundtrip() {
+        for layout in OutputLayout::ALL {
+            let mut p = Project::default();
+            p.apply_layout(layout);
+            assert_eq!(p.layout(), Some(layout));
+        }
+        let mut p = Project::default();
+        p.apply_layout(OutputLayout::Stereo);
+        assert_eq!((p.routing.main_left, p.routing.main_right, p.ltc.enabled), (0, 1, false));
+        p.routing.main_right = 3;
+        assert_eq!(p.layout(), None);
+        assert_eq!(OutputLayout::default_for(2), OutputLayout::Stereo);
+        assert_eq!(OutputLayout::default_for(8), OutputLayout::StereoPlusLtc);
     }
 
     #[test]
