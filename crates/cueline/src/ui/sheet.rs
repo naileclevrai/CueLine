@@ -53,6 +53,18 @@ pub fn show<R>(
     Some(inner)
 }
 
+/// Scrollable sheet body that leaves `reserve` pixels for a fixed footer, so
+/// tall sheets never overflow small windows.
+pub fn scroll_body<R>(ui: &mut Ui, reserve: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let max_h = (ui.ctx().content_rect().height() - 110.0 - reserve).max(160.0);
+    egui::ScrollArea::vertical()
+        .max_height(max_h)
+        .min_scrolled_height(max_h)
+        .auto_shrink([false, true])
+        .show(ui, add)
+        .inner
+}
+
 /// Rounded inset group of form rows.
 pub fn group<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     egui::Frame::new()
