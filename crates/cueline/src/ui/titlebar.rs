@@ -24,7 +24,8 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
         ctx.send_viewport_cmd(ViewportCommand::StartDrag);
     }
 
-    let title = app.title_parts();
+    let title =
+        if app.ui.screen == super::Screen::Welcome { ("CueLine".to_string(), false) } else { app.title_parts() };
     let p = ui.painter();
     let name_font = fonts::semibold(13.0);
     let name_w = p.layout_no_wrap(title.0.clone(), name_font.clone(), theme::TEXT).size().x;

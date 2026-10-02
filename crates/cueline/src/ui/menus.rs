@@ -66,8 +66,9 @@ fn shortcut(ui: &mut Ui, label: &str, keys: &str) -> egui::Response {
 pub fn menu_bar(app: &mut CueLineApp, ui: &mut Ui) {
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
-            if shortcut(ui, "New project", "Ctrl+N").clicked() && app.confirm_discard() {
-                app.new_project();
+            if shortcut(ui, "New Show…", "Ctrl+N").clicked() {
+                let outputs = app.output_channels();
+                app.ui.new_show.begin(outputs);
             }
             if shortcut(ui, "Open…", "Ctrl+O").clicked() {
                 open_dialog(app);
@@ -99,6 +100,9 @@ pub fn menu_bar(app: &mut CueLineApp, ui: &mut Ui) {
                 app.ui.export.open = true;
             }
             ui.separator();
+            if ui.add_enabled(app.ui.screen == super::Screen::Editor, egui::Button::new("Close Show")).clicked() {
+                app.close_project();
+            }
             if ui.button("Quit").clicked() {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
             }

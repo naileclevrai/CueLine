@@ -45,8 +45,9 @@ pub fn handle(app: &mut CueLineApp, ctx: &egui::Context) {
     if consume(cmd(Key::O)) {
         menus::open_dialog(app);
     }
-    if consume(cmd(Key::N)) && app.confirm_discard() {
-        app.new_project();
+    if consume(cmd(Key::N)) {
+        let outputs = app.output_channels();
+        app.ui.new_show.begin(outputs);
     }
     if consume(cmd(Key::I)) {
         menus::import_dialog(app);
@@ -58,7 +59,7 @@ pub fn handle(app: &mut CueLineApp, ctx: &egui::Context) {
         app.ui.prefs.open = true;
     }
 
-    if ctx.egui_wants_keyboard_input() {
+    if ctx.egui_wants_keyboard_input() || app.ui.screen == super::Screen::Welcome || app.ui.new_show.open {
         return;
     }
     if consume(KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z)) || consume(cmd(Key::Y)) {

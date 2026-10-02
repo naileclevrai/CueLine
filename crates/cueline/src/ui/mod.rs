@@ -6,6 +6,7 @@ pub mod fonts;
 pub mod headers;
 pub mod markers;
 pub mod menus;
+pub mod new_show;
 pub mod prefs;
 pub mod ruler;
 pub mod sheet;
@@ -15,6 +16,7 @@ pub mod theme;
 pub mod timeline;
 pub mod titlebar;
 pub mod transport;
+pub mod welcome;
 pub mod widgets;
 
 use std::collections::HashMap;
@@ -42,7 +44,18 @@ pub const METER_MASTER_R: u64 = 2;
 /// Track meters use `METER_TRACK + track id`.
 pub const METER_TRACK: u64 = 1000;
 
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum Screen {
+    /// Launch screen: new / open / recent.
+    #[default]
+    Welcome,
+    Editor,
+}
+
 pub struct UiState {
+    pub screen: Screen,
+    pub new_show: new_show::NewShowUi,
+    pub logo: Option<egui::TextureHandle>,
     pub toasts: Vec<Toast>,
     /// Where the last playback started (Space returns there).
     pub play_started_at: f64,
@@ -65,6 +78,9 @@ pub struct UiState {
 impl Default for UiState {
     fn default() -> Self {
         Self {
+            screen: Screen::Welcome,
+            new_show: new_show::NewShowUi::default(),
+            logo: None,
             toasts: Vec::new(),
             play_started_at: 0.0,
             goto_text: None,
@@ -136,6 +152,8 @@ fn handle_dropped_files(app: &mut CueLineApp, ctx: &egui::Context) {
     if audio.is_empty() {
         app.ui.toast_error("Unsupported file type".into());
     } else {
+        // Dropping audio on the welcome screen starts a quick untitled show.
+        app.ui.screen = Screen::Editor;
         app.import_files(audio);
     }
 }
@@ -267,10 +285,34 @@ fn chrome_background(ui: &egui::Ui) {
     p.hline(rect.x_range(), rect.bottom() - 0.5, egui::Stroke::new(1.0, theme::HAIRLINE));
 }
 
+/// The launch screen keeps the title bar (window controls, menus) only.
+fn draw_welcome(app: &mut CueLineApp, ui: &mut egui::Ui, ctx: &egui::Context) {
+    let full = ui.max_rect();
+    let bar = egui::Rect::from_min_size(full.min, egui::vec2(full.width(), titlebar::HEIGHT));
+    ui.painter().rect_filled(bar, 0.0, theme::BG_TOOLBAR_TOP);
+    egui::Panel::top("titlebar")
+        .exact_size(titlebar::HEIGHT)
+        .frame(egui::Frame::NONE)
+        .show_separator_line(false)
+        .show(ui, |ui| titlebar::draw(app, ui));
+    egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| welcome::draw(app, ui));
+    prefs::window(app, ctx);
+    new_show::window(app, ctx);
+    help_window(app, ctx);
+    draw_toasts(app, ctx);
+    drop_overlay(ctx);
+    window_chrome(app, ctx);
+    titlebar::resize_edges(ctx);
+}
+
 pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
     let ctx = ui.ctx().clone();
     shortcuts::handle(app, &ctx);
     handle_dropped_files(app, &ctx);
+    if app.ui.screen == Screen::Welcome {
+        draw_welcome(app, ui, &ctx);
+        return;
+    }
     chrome_background(ui);
     egui::Panel::top("titlebar")
         .exact_size(titlebar::HEIGHT)
@@ -313,6 +355,7 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
         .frame(egui::Frame::new().fill(theme::BG_CONTENT))
         .show(ui, |ui| timeline::draw(app, ui));
     prefs::window(app, &ctx);
+    new_show::window(app, &ctx);
     export_dialog::window(app, &ctx);
     help_window(app, &ctx);
     bigclock::window(app, &ctx);
