@@ -104,6 +104,17 @@ pub fn default_show_folder() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("CueLine"))
 }
 
+/// An action that discards the current project and therefore waits for the
+/// "save changes?" sheet when there are unsaved edits.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Discarding {
+    /// Show the file picker, then open the chosen show.
+    OpenDialog,
+    OpenPath(PathBuf),
+    CloseProject,
+    Quit,
+}
+
 pub struct ViewState {
     /// Horizontal zoom.
     pub px_per_sec: f32,
@@ -692,9 +703,32 @@ impl CueLineApp {
 
     /// Back to the welcome screen (asks to save first).
     pub fn close_project(&mut self) {
-        if self.confirm_discard() {
-            self.new_project();
-            self.ui.screen = ui::Screen::Welcome;
+        self.guard(Discarding::CloseProject);
+    }
+
+    /// Runs `action` now, or asks to save first when there are unsaved edits.
+    pub fn guard(&mut self, action: Discarding) {
+        if self.dirty {
+            self.ui.pending = Some(action);
+        } else {
+            self.perform(action);
+        }
+    }
+
+    /// Carries out an action once the user has chosen to save or discard.
+    pub fn perform(&mut self, action: Discarding) {
+        match action {
+            Discarding::OpenDialog => ui::menus::pick_and_open(self),
+            Discarding::OpenPath(p) => self.open_project(&p),
+            Discarding::CloseProject => {
+                self.new_project();
+                self.ui.screen = ui::Screen::Welcome;
+            }
+            Discarding::Quit => {
+                self.dirty = false;
+                self.ui.closing = true;
+                self.ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
         }
     }
 
@@ -734,24 +768,6 @@ impl CueLineApp {
                 self.ui.toast_error(e);
                 false
             }
-        }
-    }
-
-    /// Asks whether to save unsaved changes. Returns false to abort.
-    pub fn confirm_discard(&mut self) -> bool {
-        if !self.dirty {
-            return true;
-        }
-        let answer = rfd::MessageDialog::new()
-            .set_title("CueLine")
-            .set_description("Save changes to the current project?")
-            .set_level(rfd::MessageLevel::Warning)
-            .set_buttons(rfd::MessageButtons::YesNoCancel)
-            .show();
-        match answer {
-            rfd::MessageDialogResult::Yes => ui::menus::save(self),
-            rfd::MessageDialogResult::No => true,
-            _ => false,
         }
     }
 

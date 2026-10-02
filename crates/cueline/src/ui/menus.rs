@@ -20,9 +20,11 @@ pub fn import_dialog(app: &mut CueLineApp) {
 }
 
 pub fn open_dialog(app: &mut CueLineApp) {
-    if !app.confirm_discard() {
-        return;
-    }
+    app.guard(crate::app::Discarding::OpenDialog);
+}
+
+/// File picker for a show; call through [`open_dialog`] to protect edits.
+pub fn pick_and_open(app: &mut CueLineApp) {
     if let Some(path) =
         rfd::FileDialog::new().set_title("Open project").add_filter("CueLine project", &[EXTENSION]).pick_file()
     {
@@ -79,8 +81,8 @@ pub fn menu_bar(app: &mut CueLineApp, ui: &mut Ui) {
                     ui.weak("No recent projects");
                 }
                 for p in recent {
-                    if ui.button(p.display().to_string()).clicked() && app.confirm_discard() {
-                        app.open_project(&p);
+                    if ui.button(p.display().to_string()).clicked() {
+                        app.guard(crate::app::Discarding::OpenPath(p.clone()));
                         ui.close();
                     }
                 }

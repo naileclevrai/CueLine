@@ -16,6 +16,7 @@ pub mod theme;
 pub mod timeline;
 pub mod titlebar;
 pub mod transport;
+pub mod unsaved;
 pub mod welcome;
 pub mod widgets;
 
@@ -54,6 +55,8 @@ pub enum Screen {
 
 pub struct UiState {
     pub screen: Screen,
+    /// Action waiting for the "save changes?" sheet.
+    pub pending: Option<crate::app::Discarding>,
     pub new_show: new_show::NewShowUi,
     pub logo: Option<egui::TextureHandle>,
     pub toasts: Vec<Toast>,
@@ -79,6 +82,7 @@ impl Default for UiState {
     fn default() -> Self {
         Self {
             screen: Screen::Welcome,
+            pending: None,
             new_show: new_show::NewShowUi::default(),
             logo: None,
             toasts: Vec::new(),
@@ -136,9 +140,7 @@ fn handle_dropped_files(app: &mut CueLineApp, ctx: &egui::Context) {
     let is_project =
         |p: &std::path::PathBuf| p.extension().is_some_and(|e| e.eq_ignore_ascii_case(crate::project::EXTENSION));
     if let Some(project) = dropped.iter().find(|p| is_project(p)) {
-        if app.confirm_discard() {
-            app.open_project(project);
-        }
+        app.guard(crate::app::Discarding::OpenPath(project.clone()));
         return;
     }
     let audio: Vec<_> = dropped
@@ -234,10 +236,11 @@ fn window_chrome(app: &mut CueLineApp, ctx: &egui::Context) {
         app.ui.last_title = title;
     }
     if ctx.input(|i| i.viewport().close_requested()) && !app.ui.closing {
-        if app.confirm_discard() {
-            app.ui.closing = true;
-        } else {
+        if app.dirty {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            app.ui.pending = Some(crate::app::Discarding::Quit);
+        } else {
+            app.ui.closing = true;
         }
     }
 }
@@ -298,6 +301,7 @@ fn draw_welcome(app: &mut CueLineApp, ui: &mut egui::Ui, ctx: &egui::Context) {
     egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| welcome::draw(app, ui));
     prefs::window(app, ctx);
     new_show::window(app, ctx);
+    unsaved::window(app, ctx);
     help_window(app, ctx);
     draw_toasts(app, ctx);
     drop_overlay(ctx);
@@ -356,6 +360,7 @@ pub fn draw(app: &mut CueLineApp, ui: &mut egui::Ui) {
         .show(ui, |ui| timeline::draw(app, ui));
     prefs::window(app, &ctx);
     new_show::window(app, &ctx);
+    unsaved::window(app, &ctx);
     export_dialog::window(app, &ctx);
     help_window(app, &ctx);
     bigclock::window(app, &ctx);
