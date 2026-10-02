@@ -24,7 +24,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("Ctrl+N / O / S", "New / open / save project"),
     ("Ctrl+Shift+S", "Save as"),
     ("Ctrl+I", "Import audio"),
-    ("Ctrl+E", "Export WAV"),
+    ("Ctrl+E", "Export audio (WAV, AIFF, FLAC, MP3, Ogg…)"),
     ("Ctrl+,", "Preferences"),
     ("Shift (while dragging)", "Bypass frame snapping"),
 ];
