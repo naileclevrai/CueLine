@@ -1,4 +1,5 @@
-//! Audio file decoding (WAV, AIFF, FLAC, MP3, AAC/M4A, ALAC, Ogg Vorbis).
+//! Audio file decoding: WAV, AIFF, CAF, FLAC, MP3, AAC/M4A/MP4/MOV, ALAC,
+//! Ogg Vorbis and Matroska/WebM natively, anything else through ffmpeg.
 
 use std::fs::File;
 use std::path::Path;
@@ -27,7 +28,22 @@ impl DecodedAudio {
     }
 }
 
+/// Decodes with the built-in decoders, falling back to ffmpeg (when
+/// installed) for anything else: Opus, WMA, AC-3, most video files…
 pub fn decode_file(path: &Path) -> Result<DecodedAudio, String> {
+    let native = decode_native(path);
+    if native.is_ok() || !path.is_file() {
+        return native;
+    }
+    let err = native.err().unwrap_or_default();
+    if super::ffmpeg::locate().is_none() {
+        return Err(format!("{err} — installing ffmpeg adds support for many more formats"));
+    }
+    let wav = super::ffmpeg::to_wav(path).map_err(|e| format!("{err}; ffmpeg: {e}"))?;
+    decode_native(&wav.0)
+}
+
+fn decode_native(path: &Path) -> Result<DecodedAudio, String> {
     let file = File::open(path).map_err(|e| format!("cannot open file: {e}"))?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
