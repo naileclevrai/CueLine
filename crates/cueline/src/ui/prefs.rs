@@ -10,6 +10,7 @@ use super::{fonts, theme};
 use crate::app::CueLineApp;
 use crate::engine::device::{host_names, list_output_devices, AudioConfig, DeviceInfo};
 use crate::engine::mtc_out::list_ports;
+use crate::project::OutputLayout;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum Tab {
@@ -36,6 +37,12 @@ const BUFFER_SIZES: [u32; 7] = [64, 128, 256, 480, 512, 1024, 2048];
 const WIDTH: f32 = 520.0;
 
 impl PrefsUi {
+    /// Opens the sheet on a given tab.
+    pub fn open_on(&mut self, tab: Tab) {
+        self.open = true;
+        self.tab = tab;
+    }
+
     fn refresh(&mut self, app_cfg: &AudioConfig) {
         self.hosts = host_names();
         self.devices = list_output_devices(app_cfg.host.as_deref());
@@ -68,11 +75,11 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
             app.ui.prefs.tab = tab;
         });
         ui.add_space(8.0);
-        match app.ui.prefs.tab {
+        sheet::scroll_body(ui, 40.0, |ui| match app.ui.prefs.tab {
             Tab::Audio => audio_tab(app, ui),
             Tab::Timecode => timecode_tab(app, ui),
             Tab::Midi => midi_tab(app, ui),
-        }
+        });
     });
     if !open {
         app.ui.prefs.open = false;
@@ -183,6 +190,29 @@ fn audio_tab(app: &mut CueLineApp, ui: &mut Ui) {
     let channels = app.output_channels();
     let mut changed = false;
     group(ui, |ui| {
+        row(ui, "Output layout", |ui| {
+            let current = app.project.layout();
+            let label = current.map_or("Custom".to_string(), |l| l.title().to_string());
+            egui::ComboBox::from_id_salt("layout").width(200.0).selected_text(label).show_ui(ui, |ui| {
+                for l in OutputLayout::ALL {
+                    let enabled = channels >= l.outputs_needed();
+                    let text = if enabled {
+                        l.title().to_string()
+                    } else {
+                        format!("{} (needs {} outputs)", l.title(), l.outputs_needed())
+                    };
+                    let resp = ui
+                        .add_enabled(enabled, egui::Button::selectable(current == Some(l), text))
+                        .on_hover_text(l.description());
+                    if resp.clicked() {
+                        app.project.apply_layout(l);
+                        changed = true;
+                        ui.close();
+                    }
+                }
+            });
+        });
+        row_separator(ui);
         let r = &mut app.project.routing;
         row(ui, "Program left", |ui| changed |= channel_combo(ui, "main_l", &mut r.main_left, channels, true));
         row_separator(ui);
@@ -194,7 +224,8 @@ fn audio_tab(app: &mut CueLineApp, ui: &mut Ui) {
     });
     footnote(
         ui,
-        "Route only one program channel to sum the mix to mono — the classic setup is program on 1, LTC on 2.",
+        "Stereo music: outputs 1–2. Music + LTC: mono music on 1, LTC on 2. Stereo + LTC needs a third output. \
+         Routing only one program channel sums the mix to mono.",
     );
     let r = &app.project.routing;
     let ltc = app.project.ltc.channel;
@@ -311,9 +342,14 @@ fn midi_tab(app: &mut CueLineApp, ui: &mut Ui) {
         row(ui, "Output port", |ui| {
             let label = app.project.mtc.port.clone().unwrap_or_else(|| "None".into());
             popup(ui, "midi_port", label, |ui| {
-                changed |= ui.selectable_value(&mut app.project.mtc.port, None, "None").changed();
+                let mut picked = false;
+                picked |= ui.selectable_value(&mut app.project.mtc.port, None, "None").changed();
                 for p in app.ui.prefs.midi_ports.clone() {
-                    changed |= ui.selectable_value(&mut app.project.mtc.port, Some(p.clone()), p).changed();
+                    picked |= ui.selectable_value(&mut app.project.mtc.port, Some(p.clone()), p).changed();
+                }
+                if picked {
+                    app.project.mtc.enabled = app.project.mtc.port.is_some();
+                    changed = true;
                 }
             });
         });
@@ -331,6 +367,9 @@ fn midi_tab(app: &mut CueLineApp, ui: &mut Ui) {
                 .changed();
         });
     });
+    if app.ui.prefs.midi_ports.is_empty() {
+        super::new_show::no_midi_hint(ui);
+    }
     if let Some(err) = app.mtc.status.error.lock().unwrap().clone() {
         ui.label(RichText::new(err).font(fonts::text(11.5)).color(theme::RED));
     }

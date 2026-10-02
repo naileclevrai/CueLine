@@ -235,13 +235,11 @@ fn io_status(app: &mut CueLineApp, ui: &mut egui::Ui) {
         (Some(_), true) => "Port error".to_string(),
     };
     let hover = mtc.error.lock().unwrap().clone().unwrap_or_else(|| {
-        format!("MIDI Timecode — {}\nClick to toggle", app.project.mtc.port.clone().unwrap_or_else(|| "no port".into()))
+        format!("MIDI Timecode — {}\nClick to set up", app.project.mtc.port.clone().unwrap_or_else(|| "no port".into()))
     });
     let detail = if ui.available_width() > 260.0 { mtc_detail.as_str() } else { "" };
     if pill(ui, "MTC", detail, mtc_on, theme::MTC).on_hover_text(hover).clicked() {
-        app.project.mtc.enabled = !app.project.mtc.enabled;
-        app.dirty = true;
-        app.apply_project_to_engine();
+        app.ui.prefs.open_on(super::prefs::Tab::Midi);
     }
 
     if ui.available_width() < 80.0 {
@@ -258,10 +256,8 @@ fn io_status(app: &mut CueLineApp, ui: &mut egui::Ui) {
         "Not routed".to_string()
     };
     let detail = if ui.available_width() > 170.0 { detail.as_str() } else { "" };
-    if pill(ui, "LTC", detail, routed, theme::LTC).on_hover_text("Linear timecode output — click to toggle").clicked()
+    if pill(ui, "LTC", detail, routed, theme::LTC).on_hover_text("Linear timecode output — click to set up").clicked()
     {
-        app.project.ltc.enabled = !app.project.ltc.enabled;
-        app.dirty = true;
-        app.apply_project_to_engine();
+        app.ui.prefs.open_on(super::prefs::Tab::Audio);
     }
 }
