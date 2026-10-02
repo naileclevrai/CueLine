@@ -49,6 +49,10 @@ impl Settings {
     }
 
     pub fn save(&self) {
+        // Automated captures must never touch the user's real preferences.
+        if std::env::var_os("CUELINE_SCREENSHOT").is_some() {
+            return;
+        }
         let Some(path) = settings_path() else { return };
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
