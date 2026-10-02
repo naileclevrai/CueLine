@@ -204,3 +204,8 @@ The interface uses Apple's San Francisco font **only when it is already installe
 [Inter](https://rsms.me/inter/) typeface, © The Inter Project Authors, under the
 [SIL Open Font License 1.1](assets/fonts/OFL.txt). No Apple font is included in this repository or
 in release builds.
+
+Release builds also contain [LAME](https://lame.sourceforge.io) (MP3 encoding, LGPL 2.0) and
+[libvorbis/libogg](https://xiph.org/vorbis/) (BSD), compiled from source by their Rust crates. You
+can rebuild CueLine against modified versions of them with `cargo build`. ffmpeg is never bundled:
+CueLine only runs the copy that is already installed on the machine.
