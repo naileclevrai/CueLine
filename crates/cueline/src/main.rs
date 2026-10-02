@@ -6,6 +6,7 @@ mod devshot;
 mod engine;
 mod export;
 mod history;
+mod markers_io;
 mod platform;
 mod project;
 mod settings;
