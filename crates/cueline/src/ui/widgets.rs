@@ -122,6 +122,7 @@ pub enum Icon {
     Sidebar,
     Plus,
     Clock,
+    Folder,
 }
 
 pub fn paint_icon(p: &Painter, icon: Icon, c: Pos2, s: f32, color: Color32) {
@@ -189,6 +190,12 @@ pub fn paint_icon(p: &Painter, icon: Icon, c: Pos2, s: f32, color: Color32) {
         Icon::Plus => {
             p.line_segment([c + vec2(-s * 0.5, 0.0), c + vec2(s * 0.5, 0.0)], stroke);
             p.line_segment([c + vec2(0.0, -s * 0.5), c + vec2(0.0, s * 0.5)], stroke);
+        }
+        Icon::Folder => {
+            let body = Rect::from_center_size(c + vec2(0.0, s * 0.1), vec2(s * 1.4, s * 0.95));
+            let tab = Rect::from_min_size(body.left_top() - vec2(0.0, s * 0.22), vec2(s * 0.6, s * 0.3));
+            p.rect_filled(tab, CornerRadius::same(2), color);
+            p.rect_filled(body, CornerRadius::same(2), color);
         }
         Icon::Clock => {
             p.circle_stroke(c, s * 0.6, stroke);

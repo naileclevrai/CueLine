@@ -36,4 +36,5 @@ m.resize((256, 256), Image.LANCZOS).save("assets/cueline.ico", sizes=[(s, s) for
 m.resize((512, 512), Image.LANCZOS).save("assets/cueline.png")
 rgba = m.resize((64, 64), Image.LANCZOS).tobytes()
 open("assets/icon-64.rgba", "wb").write(rgba)
+open("assets/icon-128.rgba", "wb").write(m.resize((128, 128), Image.LANCZOS).tobytes())
 print("icon written")
