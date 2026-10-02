@@ -143,8 +143,20 @@ fn handle_dropped_files(app: &mut CueLineApp, ctx: &egui::Context) {
         app.guard(crate::app::Discarding::OpenPath(project.clone()));
         return;
     }
+    let is_cue_list = |p: &std::path::PathBuf| {
+        p.extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| ["csv", "tsv", "txt", "mid", "midi"].iter().any(|x| x.eq_ignore_ascii_case(e)))
+    };
+    let cue_lists: Vec<_> = dropped.iter().filter(|p| is_cue_list(p)).cloned().collect();
+    if app.ui.screen == Screen::Editor {
+        for p in &cue_lists {
+            app.import_markers(p);
+        }
+    }
     let audio: Vec<_> = dropped
         .into_iter()
+        .filter(|p| !is_cue_list(p))
         .filter(|p| {
             p.extension()
                 .and_then(|e| e.to_str())
@@ -152,7 +164,9 @@ fn handle_dropped_files(app: &mut CueLineApp, ctx: &egui::Context) {
         })
         .collect();
     if audio.is_empty() {
-        app.ui.toast_error("Unsupported file type".into());
+        if cue_lists.is_empty() {
+            app.ui.toast_error("Unsupported file type".into());
+        }
     } else {
         // Dropping audio on the welcome screen starts a quick untitled show.
         app.ui.screen = Screen::Editor;

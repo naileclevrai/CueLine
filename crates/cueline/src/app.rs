@@ -199,6 +199,7 @@ impl CueLineApp {
             audio_retry_at: None,
             devshot: crate::devshot::DevShot::from_env(),
         };
+        crate::audio::ffmpeg::set_override(app.settings.ffmpeg_path.clone());
         app.restart_audio();
         app.apply_project_to_engine();
         if let Some(path) = open {
@@ -502,6 +503,42 @@ impl CueLineApp {
         self.sort_markers();
         self.view.selected_marker = self.project.markers.iter().position(|m| m.time_secs == secs);
         self.dirty = true;
+    }
+
+    /// Adds the cues found in a CSV, MIDI or WAV file. Seconds are taken from
+    /// the project start; timecodes are converted with the project rate.
+    pub fn import_markers(&mut self, path: &Path) {
+        let found = match crate::markers_io::import(path) {
+            Ok(m) => m,
+            Err(e) => return self.ui.toast_error(e),
+        };
+        self.checkpoint();
+        let rate = self.project.frame_rate;
+        let (mut added, mut skipped) = (0, 0);
+        for (i, m) in found.into_iter().enumerate() {
+            let secs = match m.time {
+                crate::markers_io::MarkerTime::Seconds(s) => s,
+                crate::markers_io::MarkerTime::Timecode(tc) => {
+                    (tc.to_frames(rate) - self.project.start_frames()) as f64 / rate.fps()
+                }
+            };
+            if secs < 0.0 {
+                skipped += 1;
+                continue;
+            }
+            let name = if m.name.is_empty() { format!("Cue {}", self.project.markers.len() + 1) } else { m.name };
+            let colors =
+                [[0xff, 0x9f, 0x0a], [0x0a, 0x84, 0xff], [0x30, 0xd1, 0x58], [0xbf, 0x5a, 0xf2], [0xff, 0x45, 0x3a]];
+            self.project.markers.push(Marker { name, time_secs: secs, color: colors[i % colors.len()] });
+            added += 1;
+        }
+        self.sort_markers();
+        self.dirty = true;
+        let mut msg = format!("Imported {added} marker{}", if added == 1 { "" } else { "s" });
+        if skipped > 0 {
+            msg.push_str(&format!(" ({skipped} before the project start were skipped)"));
+        }
+        self.ui.toast_info(msg);
     }
 
     pub fn remove_marker(&mut self, idx: usize) {

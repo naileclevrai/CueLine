@@ -6,7 +6,12 @@ use super::timeline::Map;
 use crate::app::CueLineApp;
 use crate::project::EXTENSION;
 
-pub const AUDIO_EXTENSIONS: [&str; 10] = ["wav", "wave", "aif", "aiff", "flac", "mp3", "m4a", "aac", "ogg", "caf"];
+/// Files offered by the import dialog and accepted by drag & drop. The
+/// video and "ffmpeg" ones fall back to ffmpeg when it is installed.
+pub const AUDIO_EXTENSIONS: [&str; 27] = [
+    "wav", "wave", "bwf", "w64", "aif", "aiff", "aifc", "caf", "flac", "mp3", "mp2", "m4a", "aac", "alac", "ogg",
+    "oga", "opus", "wma", "ac3", "eac3", "mp4", "mov", "m4v", "mkv", "mka", "webm", "avi",
+];
 
 pub fn import_dialog(app: &mut CueLineApp) {
     if let Some(files) = rfd::FileDialog::new()
@@ -16,6 +21,16 @@ pub fn import_dialog(app: &mut CueLineApp) {
         .pick_files()
     {
         app.import_files(files);
+    }
+}
+
+pub fn import_markers_dialog(app: &mut CueLineApp) {
+    if let Some(path) = rfd::FileDialog::new()
+        .set_title("Import markers")
+        .add_filter("Cue lists (CSV, MIDI, WAV)", &crate::markers_io::EXTENSIONS)
+        .pick_file()
+    {
+        app.import_markers(&path);
     }
 }
 
@@ -98,7 +113,11 @@ pub fn menu_bar(app: &mut CueLineApp, ui: &mut Ui) {
             if shortcut(ui, "Import audio…", "Ctrl+I").clicked() {
                 import_dialog(app);
             }
-            if shortcut(ui, "Export WAV…", "Ctrl+E").clicked() {
+            if ui.add_enabled(app.ui.screen == super::Screen::Editor, egui::Button::new("Import markers…")).clicked()
+            {
+                import_markers_dialog(app);
+            }
+            if shortcut(ui, "Export audio…", "Ctrl+E").clicked() {
                 app.ui.export.open = true;
             }
             ui.separator();
