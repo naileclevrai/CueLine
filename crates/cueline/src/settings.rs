@@ -18,6 +18,8 @@ pub struct Settings {
     pub snap_to_frames: bool,
     /// Stop the transport when the playhead passes the last clip or marker.
     pub stop_at_end: bool,
+    /// Explicit ffmpeg executable; `None` searches `PATH`.
+    pub ffmpeg_path: Option<PathBuf>,
 }
 
 impl Default for Settings {
@@ -28,6 +30,7 @@ impl Default for Settings {
             follow_playhead: true,
             snap_to_frames: true,
             stop_at_end: false,
+            ffmpeg_path: None,
         }
     }
 }

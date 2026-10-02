@@ -18,6 +18,7 @@ pub enum Tab {
     Audio,
     Timecode,
     Midi,
+    Formats,
 }
 
 #[derive(Default)]
@@ -31,6 +32,8 @@ pub struct PrefsUi {
     draft: AudioConfig,
     start_tc: String,
     user_bits: String,
+    /// (path, version) of the ffmpeg found when the sheet opened.
+    ffmpeg: Option<(std::path::PathBuf, String)>,
 }
 
 const BUFFER_SIZES: [u32; 7] = [64, 128, 256, 480, 512, 1024, 2048];
@@ -48,6 +51,7 @@ impl PrefsUi {
         self.devices = list_output_devices(app_cfg.host.as_deref());
         self.midi_ports = list_ports();
         self.draft = app_cfg.clone();
+        self.ffmpeg = probe_ffmpeg();
         self.loaded = true;
     }
 }
@@ -70,7 +74,12 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
             segmented(
                 ui,
                 &mut tab,
-                &[(Tab::Audio, "Audio"), (Tab::Timecode, "Timecode"), (Tab::Midi, "MIDI Timecode")],
+                &[
+                    (Tab::Audio, "Audio"),
+                    (Tab::Timecode, "Timecode"),
+                    (Tab::Midi, "MIDI Timecode"),
+                    (Tab::Formats, "Formats"),
+                ],
             );
             app.ui.prefs.tab = tab;
         });
@@ -79,10 +88,92 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
             Tab::Audio => audio_tab(app, ui),
             Tab::Timecode => timecode_tab(app, ui),
             Tab::Midi => midi_tab(app, ui),
+            Tab::Formats => formats_tab(app, ui),
         });
     });
     if !open {
         app.ui.prefs.open = false;
+    }
+}
+
+fn probe_ffmpeg() -> Option<(std::path::PathBuf, String)> {
+    let path = crate::audio::ffmpeg::locate()?;
+    let version = crate::audio::ffmpeg::version(&path).unwrap_or_else(|| "ffmpeg".into());
+    Some((path, version))
+}
+
+fn formats_tab(app: &mut CueLineApp, ui: &mut Ui) {
+    section(ui, "Built in");
+    group(ui, |ui| {
+        row(ui, "Import", |ui| {
+            ui.label(
+                RichText::new("WAV · AIFF · CAF · FLAC · MP3 · AAC/M4A · ALAC · Ogg · MP4/MOV · MKV/WebM")
+                    .font(fonts::text(11.5))
+                    .color(theme::TEXT_DIM),
+            );
+        });
+        row_separator(ui);
+        row(ui, "Export", |ui| {
+            ui.label(
+                RichText::new("WAV · AIFF · FLAC · MP3 · Ogg Vorbis").font(fonts::text(11.5)).color(theme::TEXT_DIM),
+            );
+        });
+    });
+
+    section(ui, "ffmpeg (optional)");
+    let mut changed = None;
+    group(ui, |ui| {
+        row(ui, "Status", |ui| match &app.ui.prefs.ffmpeg {
+            Some((_, version)) => {
+                ui.label(RichText::new(format!("● {version}")).font(fonts::text(12.0)).color(theme::GREEN));
+            }
+            None => {
+                ui.label(RichText::new("Not found").font(fonts::text(12.0)).color(theme::TEXT_DIM));
+            }
+        });
+        row_separator(ui);
+        row(ui, "Location", |ui| {
+            if app.settings.ffmpeg_path.is_some() && sheet::button(ui, "Use PATH").clicked() {
+                changed = Some(None);
+            }
+            if sheet::button(ui, "Choose…").clicked() {
+                if let Some(p) =
+                    rfd::FileDialog::new().set_title("Locate ffmpeg").add_filter("ffmpeg", &["exe"]).pick_file()
+                {
+                    changed = Some(Some(p));
+                }
+            }
+            let shown = match (&app.settings.ffmpeg_path, &app.ui.prefs.ffmpeg) {
+                (Some(p), _) => p.display().to_string(),
+                (None, Some((p, _))) => format!("PATH: {}", p.display()),
+                (None, None) => "Searched in PATH".into(),
+            };
+            ui.add(egui::Label::new(RichText::new(&shown).font(fonts::text(11.5)).color(theme::TEXT_DIM)).truncate())
+                .on_hover_text(&shown);
+        });
+    });
+    if let Some(p) = changed {
+        app.settings.ffmpeg_path = p;
+        crate::audio::ffmpeg::set_override(app.settings.ffmpeg_path.clone());
+        app.settings.save();
+        app.ui.prefs.ffmpeg = probe_ffmpeg();
+    }
+    footnote(
+        ui,
+        "With ffmpeg, CueLine also imports Opus, WMA, AC-3/E-AC-3, AVI and any video file ffmpeg can read, and exports Opus and AAC. \
+         Nothing is bundled: CueLine runs the ffmpeg already installed on this computer.",
+    );
+    if app.ui.prefs.ffmpeg.is_none() {
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            ui.hyperlink_to(
+                RichText::new("Download ffmpeg").font(fonts::text(12.0)),
+                "https://ffmpeg.org/download.html",
+            );
+            ui.label(
+                RichText::new("or run  winget install Gyan.FFmpeg").font(fonts::mono(11.5)).color(theme::TEXT_DIM),
+            );
+        });
     }
 }
 
