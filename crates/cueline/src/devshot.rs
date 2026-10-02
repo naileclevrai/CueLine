@@ -6,7 +6,7 @@
 //!
 //! * `CUELINE_SCREENSHOT_SEEK=<seconds>` — move the playhead first;
 //! * `CUELINE_SCREENSHOT_PLAY=<seconds>` — play for that long first;
-//! * `CUELINE_SCREENSHOT_WINDOW=prefs|export|help|newshow` — open a dialog;
+//! * `CUELINE_SCREENSHOT_WINDOW=prefs|export|help|newshow|unsaved` — open a dialog;
 //! * `CUELINE_SCREENSHOT_FRAMES=<n>` and `CUELINE_SCREENSHOT_INTERVAL=<ms>` —
 //!   record a sequence (`out_000.ppm`, `out_001.ppm`, …) for animations.
 
@@ -68,6 +68,10 @@ impl DevShot {
                         Some("prefs") => app.ui.prefs.open = true,
                         Some("export") => app.ui.export.open = true,
                         Some("help") => app.ui.show_help = true,
+                        Some("unsaved") => {
+                            app.dirty = true;
+                            app.ui.pending = Some(crate::app::Discarding::CloseProject);
+                        }
                         Some("newshow") => {
                             let outputs = app.output_channels();
                             app.ui.new_show.begin(outputs);
