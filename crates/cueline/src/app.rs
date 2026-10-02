@@ -16,7 +16,7 @@ use crate::engine::device::AudioEngine;
 use crate::engine::mtc_out::MtcOutput;
 use crate::engine::shared::{ClipData, Command, EngineShared, RtTrack, TrackParams};
 use crate::history::{History, Snapshot};
-use crate::project::{Marker, Project, TrackDef};
+use crate::project::{Marker, OutputLayout, Project, TrackDef, EXTENSION};
 use crate::settings::Settings;
 use crate::ui;
 
@@ -61,6 +61,47 @@ enum LoadMsg {
     Loaded { id: u64, source: Arc<DecodedAudio>, peaks: Arc<Peaks>, clip: Arc<ClipData>, rate: u32 },
     Resampled { id: u64, clip: Arc<ClipData>, rate: u32 },
     Failed { id: u64, error: String },
+}
+
+/// Everything the "New Show" assistant collects.
+#[derive(Clone, Debug)]
+pub struct NewShow {
+    pub name: String,
+    pub folder: PathBuf,
+    pub rate: cueline_core::FrameRate,
+    pub start: Timecode,
+    pub layout: OutputLayout,
+    /// `None` = do not send MIDI Timecode.
+    pub mtc_port: Option<String>,
+}
+
+/// Keeps only characters that are safe in a folder and file name.
+pub fn sanitize_name(name: &str) -> String {
+    let cleaned: String =
+        name.trim()
+            .chars()
+            .map(|c| {
+                if matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || c.is_control() {
+                    '-'
+                } else {
+                    c
+                }
+            })
+            .collect();
+    let cleaned = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace()).to_string();
+    if cleaned.is_empty() {
+        "Untitled Show".into()
+    } else {
+        cleaned
+    }
+}
+
+/// `Documents\CueLine`, where new shows are created by default.
+pub fn default_show_folder() -> PathBuf {
+    std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(|h| PathBuf::from(h).join("Documents").join("CueLine"))
+        .unwrap_or_else(|| PathBuf::from("CueLine"))
 }
 
 pub struct ViewState {
@@ -626,9 +667,41 @@ impl CueLineApp {
         self.push_tracks();
     }
 
+    /// Creates `<folder>/<name>/<name>.cueline` and opens it.
+    pub fn create_show(&mut self, show: &NewShow) -> Result<PathBuf, String> {
+        let name = sanitize_name(&show.name);
+        let dir = show.folder.join(&name);
+        let path = dir.join(format!("{name}.{EXTENSION}"));
+        if path.exists() {
+            return Err(format!("A show named \"{name}\" already exists in {}", show.folder.display()));
+        }
+        std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot create {}: {e}", dir.display()))?;
+        self.new_project();
+        self.project.frame_rate = show.rate;
+        self.project.start_timecode = if show.start.is_valid(show.rate) { show.start } else { Timecode::default() };
+        self.project.apply_layout(show.layout);
+        self.project.mtc.enabled = show.mtc_port.is_some();
+        self.project.mtc.port = show.mtc_port.clone();
+        self.apply_project_to_engine();
+        if !self.save_project_to(&path) {
+            return Err(format!("Cannot save {}", path.display()));
+        }
+        self.ui.screen = ui::Screen::Editor;
+        Ok(path)
+    }
+
+    /// Back to the welcome screen (asks to save first).
+    pub fn close_project(&mut self) {
+        if self.confirm_discard() {
+            self.new_project();
+            self.ui.screen = ui::Screen::Welcome;
+        }
+    }
+
     pub fn open_project(&mut self, path: &Path) {
         match Project::load(path) {
             Ok(p) => {
+                self.ui.screen = ui::Screen::Editor;
                 self.new_project();
                 let defs = p.tracks.clone();
                 self.project = p;
@@ -728,6 +801,14 @@ mod tests {
     use super::*;
     use crate::ui::timeline::snap_to_frame;
     use cueline_core::FrameRate;
+
+    #[test]
+    fn show_names_are_safe_file_names() {
+        assert_eq!(sanitize_name("  Opening Night  "), "Opening Night");
+        assert_eq!(sanitize_name("Tour 2026: Paris/Lyon?"), "Tour 2026- Paris-Lyon-");
+        assert_eq!(sanitize_name("..."), "Untitled Show");
+        assert_eq!(sanitize_name(""), "Untitled Show");
+    }
 
     #[test]
     fn decibels() {
