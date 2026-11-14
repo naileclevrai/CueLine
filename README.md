@@ -209,3 +209,32 @@ Release builds also contain [LAME](https://lame.sourceforge.io) (MP3 encoding, L
 [libvorbis/libogg](https://xiph.org/vorbis/) (BSD), compiled from source by their Rust crates. You
 can rebuild CueLine against modified versions of them with `cargo build`. ffmpeg is never bundled:
 CueLine only runs the copy that is already installed on the machine.
+
+## OSC remote control
+
+CueLine can receive OSC over UDP and send transport feedback. Open **Settings → OSC**, enable OSC, and apply the settings. By default it listens on `127.0.0.1:9000`, so only applications on the same computer can control it. To receive from another computer, use an address such as `0.0.0.0:9000`, allow UDP through the firewall, and send to this computer's IP address. OSC has no authentication; only expose it on a trusted network. The receiver and feedback destination use numeric IP addresses and nonzero ports. Settings are stored per computer.
+
+| Incoming address | Argument | Action |
+| --- | --- | --- |
+| `/cueline/play` | button | Start playback if stopped |
+| `/cueline/pause` | button | Pause at the current position |
+| `/cueline/stop` | button | Stop and return to the playback start |
+| `/cueline/toggle` | button | Toggle play / stop |
+| `/cueline/seek` | float32 or int32 | Locate to seconds from project start (0–86400) |
+| `/cueline/cue` | int32 | Locate to a cue by its one-based list number |
+| `/cueline/cue/next` | button | Locate to the next cue |
+| `/cueline/cue/previous` | button | Locate to the previous cue |
+| `/cueline/cue/add` | button | Add a cue at the playhead |
+
+A button accepts no arguments, OSC true, or a positive int32/float32; zero and negative values are ignored, so a controller's release message does not trigger the action again. Immediate OSC bundles are supported; future-scheduled bundles are ignored. Commands are ignored on the welcome screen and while a settings, export, help, new-show or save-confirmation dialog is open.
+
+To enable feedback, set a destination IP and port (default `127.0.0.1:9001`). CueLine sends these individual messages up to ten times per second while a show is open:
+
+| Feedback address | Argument | Meaning |
+| --- | --- | --- |
+| `/cueline/state/playing` | int32 | 1 playing, 0 stopped |
+| `/cueline/state/position` | float32 | Position in seconds |
+| `/cueline/state/timecode` | string | Timecode at the playhead |
+| `/cueline/state/cue` | int32 | Current cue number, or 0 before the first cue |
+
+Example with a compatible OSC command-line sender: `oscsend 127.0.0.1 9000 /cueline/play` or `oscsend 127.0.0.1 9000 /cueline/seek f 12.5`.

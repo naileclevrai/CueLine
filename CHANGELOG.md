@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- OSC over UDP for transport, cue navigation and creation, with optional position and timecode feedback.
+
+### Fixed
+- Cue renaming releases focus on click, confirms with Enter, cancels with Escape and stays within the name line.
+
 ## [0.2.0] - 2026-11-14
 
 ### Added
