@@ -98,15 +98,21 @@ pub fn panel(app: &mut CueLineApp, ui: &mut Ui) {
             let text_x = rect.left() + 42.0;
             let renaming = app.ui.rename_marker.as_ref().is_some_and(|(idx, _)| *idx == i);
             if renaming {
-                let r = Rect::from_min_max(
-                    pos2(text_x - 2.0, rect.top() + 5.0),
-                    pos2(rect.right() - 8.0, rect.top() + 25.0),
-                );
+                let r = Rect::from_min_max(pos2(text_x, rect.top() + 6.0), pos2(rect.right() - 8.0, rect.top() + 26.0));
                 let (_, text) = app.ui.rename_marker.as_mut().unwrap();
-                let edit = ui.put(r, egui::TextEdit::singleline(text).font(fonts::medium(13.0)));
-                edit.request_focus();
-                if edit.lost_focus() {
+                let edit = ui
+                    .scope_builder(egui::UiBuilder::new().max_rect(r), |ui| {
+                        ui.set_clip_rect(ui.clip_rect().intersect(r));
+                        ui.put(r, egui::TextEdit::singleline(text).font(fonts::medium(13.0)).margin(vec2(2.0, 0.0)))
+                    })
+                    .inner;
+                if app.ui.rename_marker_focus {
+                    edit.request_focus();
+                    app.ui.rename_marker_focus = false;
+                } else if edit.lost_focus() {
                     commit_rename = Some(!ui.input(|i| i.key_pressed(egui::Key::Escape)));
+                } else if edit.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    commit_rename = Some(false);
                 }
             } else {
                 let name = if m.name.is_empty() { format!("Cue {}", i + 1) } else { m.name.clone() };
@@ -165,6 +171,7 @@ pub fn panel(app: &mut CueLineApp, ui: &mut Ui) {
                 }
                 if ui.button("Rename").clicked() {
                     app.ui.rename_marker = Some((i, m.name.clone()));
+                    app.ui.rename_marker_focus = true;
                     ui.close();
                 }
                 ui.separator();
