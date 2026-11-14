@@ -241,6 +241,24 @@ mod tests {
     }
 
     #[test]
+    fn default_routing_preserves_stereo() {
+        let (mut m, mut tx, sh) = setup();
+        let project = crate::project::Project::default();
+        assert_eq!(sh.main_left.load(Ordering::Relaxed), project.routing.main_left);
+        assert_eq!(sh.main_right.load(Ordering::Relaxed), project.routing.main_right);
+        assert_eq!(sh.ltc_enabled.load(Ordering::Relaxed), project.ltc.enabled);
+        let t = RtTrack {
+            data: Arc::new(ClipData { channels: vec![vec![0.25; 64], vec![0.75; 64]] }),
+            params: Arc::new(TrackParams::new(1.0, 0)),
+        };
+        tx.push(Command::SetTracks(vec![t])).ok();
+        tx.push(Command::Play).ok();
+        let mut out = vec![0.0; 128];
+        m.process(&mut out, 2);
+        assert!(out.as_chunks::<2>().0.iter().all(|f| *f == [0.25, 0.75]));
+    }
+
+    #[test]
     fn silent_when_stopped() {
         let (mut m, _tx, _) = setup();
         let mut out = vec![1.0; 1024];
@@ -276,7 +294,7 @@ mod tests {
         tx.push(Command::Play).ok();
         let mut out = vec![0.0; 2 * 64];
         m.process(&mut out, 2);
-        assert_eq!(out[0], 0.5); // only the soloed track, mono-summed on channel 0
+        assert_eq!(out[0], 0.5); // only the soloed track
         b.params.mute.store(true, Ordering::Relaxed);
         m.process(&mut out, 2);
         assert_eq!(out[0], 0.0);
@@ -288,6 +306,7 @@ mod tests {
         sh.main_left.store(0, Ordering::Relaxed);
         sh.main_right.store(NO_CHANNEL, Ordering::Relaxed);
         sh.ltc_channel.store(2, Ordering::Relaxed);
+        sh.ltc_enabled.store(true, Ordering::Relaxed);
         let start = Timecode::new(1, 0, 0, 0).to_frames(FrameRate::Fps25);
         tx.push(Command::SetTimecode { rate: FrameRate::Fps25, start_frames: start, user_bits: 0 }).ok();
         tx.push(Command::Play).ok();

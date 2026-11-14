@@ -50,9 +50,9 @@ pub struct Routing {
 }
 
 impl Default for Routing {
-    /// Classic two-channel show setup: program on the left, LTC on the right.
+    /// Stereo monitoring; LTC layouts are selected explicitly.
     fn default() -> Self {
-        Self { main_left: 0, main_right: -1 }
+        Self { main_left: 0, main_right: 1 }
     }
 }
 
@@ -66,7 +66,7 @@ pub struct LtcSettings {
 
 impl Default for LtcSettings {
     fn default() -> Self {
-        Self { enabled: true, level_db: -12.0, channel: 1 }
+        Self { enabled: false, level_db: -12.0, channel: -1 }
     }
 }
 
@@ -305,7 +305,7 @@ mod tests {
     fn missing_fields_take_defaults() {
         let p: Project = serde_json::from_str(r#"{"frame_rate":"24"}"#).unwrap();
         assert_eq!(p.frame_rate, FrameRate::Fps24);
-        assert!(p.ltc.enabled);
+        assert_eq!(p.layout(), Some(OutputLayout::Stereo));
         assert_eq!(p.start_timecode, Timecode::new(1, 0, 0, 0));
     }
 }
