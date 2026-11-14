@@ -20,6 +20,7 @@ All notable changes to this project are documented here. The format follows
 - Projects created with defaults played music on the left output only.
 - Protect unsaved changes when creating a new show from the menu or keyboard.
 - Keep decoded audio channels aligned when a stream changes its channel layout, and limit metadata-based preallocation.
+- Fix native reimport of exported FLAC files when ffmpeg is not installed.
 
 ## [0.1.0] - 2026-10-01
 

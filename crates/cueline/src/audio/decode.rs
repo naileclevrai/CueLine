@@ -43,7 +43,7 @@ pub fn decode_file(path: &Path) -> Result<DecodedAudio, String> {
     decode_native(&wav.0)
 }
 
-fn decode_native(path: &Path) -> Result<DecodedAudio, String> {
+pub(crate) fn decode_native(path: &Path) -> Result<DecodedAudio, String> {
     let file = File::open(path).map_err(|e| format!("cannot open file: {e}"))?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();

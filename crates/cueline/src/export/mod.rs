@@ -195,7 +195,7 @@ pub fn run(job: ExportJob, progress: &AtomicF32, cancel: &AtomicBool) -> Result<
 mod tests {
     use super::encode::Depth;
     use super::*;
-    use crate::audio::decode::decode_file;
+    use crate::audio::decode::{decode_file, decode_native};
     use cueline_core::ltc::LtcDecoder;
     use cueline_core::Timecode;
 
@@ -260,7 +260,7 @@ mod tests {
         ];
         for (name, enc) in cases {
             let path = export(name, enc, ExportKind::MonoMixLtc);
-            let a = decode_file(&path).unwrap_or_else(|e| panic!("{name}: {e}"));
+            let a = decode_native(&path).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(a.sample_rate, 48_000, "{name}");
             assert_eq!(a.channels.len(), 2, "{name}");
             assert!((a.frames() as i64 - 96_000).abs() <= 1, "{name}: {} frames", a.frames());

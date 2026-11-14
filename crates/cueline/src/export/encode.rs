@@ -358,7 +358,14 @@ fn flac(path: &Path, depth: Depth, r: &mut Renderer<'_>) -> Result<(), String> {
     let config = config.into_verified().map_err(|e| format!("{e:?}"))?;
     let block = config.block_size;
     let mut src = FlacSource { r, q: Quantizer::new(depth.bits()), buf: Vec::new(), ints: Vec::new(), error: None };
-    let stream = flacenc::encode_with_fixed_block_size(&config, &mut src, block).map_err(|e| format!("{e:?}"))?;
+    let mut stream = flacenc::encode_with_fixed_block_size(&config, &mut src, block).map_err(|e| format!("{e:?}"))?;
+    // The last frame may be shorter, but this encoder uses fixed-block frame
+    // numbers throughout. STREAMINFO must describe that fixed block size;
+    // otherwise decoders can mistake the stream for variable-block FLAC.
+    let block_size = stream.stream_info().max_block_size();
+    if block_size > 0 {
+        stream.stream_info_mut().set_block_sizes(block_size, block_size).map_err(|e| format!("{e:?}"))?;
+    }
     if let Some(e) = src.error {
         return Err(e);
     }
