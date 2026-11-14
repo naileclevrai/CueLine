@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-14
+
 ### Added
 - Welcome screen with recent shows, and a New Show assistant (timecode, output layout, MIDI port).
 - Output layouts: stereo music, music + LTC, stereo music + LTC (3 outputs).
@@ -16,6 +18,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 - Projects created with defaults played music on the left output only.
+- Protect unsaved changes when creating a new show from the menu or keyboard.
+- Keep decoded audio channels aligned when a stream changes its channel layout, and limit metadata-based preallocation.
 
 ## [0.1.0] - 2026-10-01
 
