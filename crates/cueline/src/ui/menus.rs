@@ -84,8 +84,7 @@ pub fn menu_bar(app: &mut CueLineApp, ui: &mut Ui) {
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if shortcut(ui, "New Show…", "Ctrl+N").clicked() {
-                let outputs = app.output_channels();
-                app.ui.new_show.begin(outputs);
+                app.guard(crate::app::Discarding::NewShow);
             }
             if shortcut(ui, "Open…", "Ctrl+O").clicked() {
                 open_dialog(app);

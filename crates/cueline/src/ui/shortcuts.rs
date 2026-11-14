@@ -46,8 +46,7 @@ pub fn handle(app: &mut CueLineApp, ctx: &egui::Context) {
         menus::open_dialog(app);
     }
     if consume(cmd(Key::N)) {
-        let outputs = app.output_channels();
-        app.ui.new_show.begin(outputs);
+        app.guard(crate::app::Discarding::NewShow);
     }
     if consume(cmd(Key::I)) {
         menus::import_dialog(app);

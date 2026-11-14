@@ -108,6 +108,7 @@ pub fn default_show_folder() -> PathBuf {
 /// "save changes?" sheet when there are unsaved edits.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Discarding {
+    NewShow,
     /// Show the file picker, then open the chosen show.
     OpenDialog,
     OpenPath(PathBuf),
@@ -755,6 +756,10 @@ impl CueLineApp {
     /// Carries out an action once the user has chosen to save or discard.
     pub fn perform(&mut self, action: Discarding) {
         match action {
+            Discarding::NewShow => {
+                let outputs = self.output_channels();
+                self.ui.new_show.begin(outputs);
+            }
             Discarding::OpenDialog => ui::menus::pick_and_open(self),
             Discarding::OpenPath(p) => self.open_project(&p),
             Discarding::CloseProject => {
