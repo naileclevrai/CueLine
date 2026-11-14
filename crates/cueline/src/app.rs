@@ -160,6 +160,7 @@ pub struct CueLineApp {
     pub engine: Option<AudioEngine>,
     pub engine_error: Option<String>,
     pub mtc: MtcOutput,
+    pub osc: crate::osc::Osc,
     pub tracks: Vec<Track>,
     next_id: u64,
     load_tx: Sender<LoadMsg>,
@@ -179,16 +180,23 @@ impl CueLineApp {
         let shared = EngineShared::new();
         let mtc = MtcOutput::spawn(shared.clone());
         let (load_tx, load_rx) = mpsc::channel();
+        let settings = Settings::load();
+        let osc = crate::osc::Osc::new(&if std::env::var_os("CUELINE_SCREENSHOT").is_some() {
+            crate::osc::OscConfig::default()
+        } else {
+            settings.osc.clone()
+        });
         let mut app = Self {
             ctx: cc.egui_ctx.clone(),
             project: Project::default(),
             project_path: None,
             dirty: false,
-            settings: Settings::load(),
+            settings,
             shared,
             engine: None,
             engine_error: None,
             mtc,
+            osc,
             tracks: Vec::new(),
             next_id: 1,
             load_tx,
@@ -839,6 +847,41 @@ impl eframe::App for CueLineApp {
             crate::platform::round_window_corners();
         }
         self.poll();
+        let actions = self.osc.poll();
+        if self.ui.screen == ui::Screen::Editor
+            && self.ui.pending.is_none()
+            && !self.ui.new_show.open
+            && !self.ui.prefs.open
+            && !self.ui.export.open
+            && !self.ui.show_help
+        {
+            for action in actions {
+                use crate::osc::Action;
+                match action {
+                    Action::Play => {
+                        if !self.is_playing() {
+                            self.play();
+                        }
+                    }
+                    Action::Pause => self.pause(),
+                    Action::Stop => self.stop(),
+                    Action::Toggle => self.toggle_play(),
+                    Action::Seek(seconds) => self.seek(seconds),
+                    Action::Cue(index) => self.goto_marker(index),
+                    Action::Next => self.goto_adjacent_marker(true),
+                    Action::Previous => self.goto_adjacent_marker(false),
+                    Action::AddCue => self.add_marker_at(self.position_secs()),
+                }
+            }
+            let position = self.position_secs();
+            let tc = self.timecode_at(position).display(self.project.frame_rate).to_string();
+            let playing = self.is_playing();
+            let cue = self.project.markers.iter().rposition(|m| m.time_secs <= position + 1e-6);
+            self.osc.feedback(playing, position, &tc, cue);
+        }
+        if self.osc.active() {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(20));
+        }
         ui::draw(self, ui);
         if let Some(mut shot) = self.devshot.take() {
             shot.update(self, ui.ctx());

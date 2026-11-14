@@ -20,6 +20,7 @@ pub struct Settings {
     pub stop_at_end: bool,
     /// Explicit ffmpeg executable; `None` searches `PATH`.
     pub ffmpeg_path: Option<PathBuf>,
+    pub osc: crate::osc::OscConfig,
 }
 
 impl Default for Settings {
@@ -31,6 +32,7 @@ impl Default for Settings {
             snap_to_frames: true,
             stop_at_end: false,
             ffmpeg_path: None,
+            osc: crate::osc::OscConfig::default(),
         }
     }
 }

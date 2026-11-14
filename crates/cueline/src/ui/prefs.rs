@@ -18,6 +18,7 @@ pub enum Tab {
     Audio,
     Timecode,
     Midi,
+    Osc,
     Formats,
 }
 
@@ -34,6 +35,8 @@ pub struct PrefsUi {
     user_bits: String,
     /// (path, version) of the ffmpeg found when the sheet opened.
     ffmpeg: Option<(std::path::PathBuf, String)>,
+    osc_draft: crate::osc::OscConfig,
+    osc_error: Option<String>,
 }
 
 const BUFFER_SIZES: [u32; 7] = [64, 128, 256, 480, 512, 1024, 2048];
@@ -66,6 +69,8 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
         app.ui.prefs.refresh(&cfg);
         app.ui.prefs.start_tc = app.project.start_timecode.to_string();
         app.ui.prefs.user_bits = format!("{:08X}", app.project.user_bits);
+        app.ui.prefs.osc_draft = app.settings.osc.clone();
+        app.ui.prefs.osc_error = None;
     }
     let mut open = true;
     sheet::show(ctx, "Settings", &mut open, WIDTH, |ui| {
@@ -78,6 +83,7 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
                     (Tab::Audio, "Audio"),
                     (Tab::Timecode, "Timecode"),
                     (Tab::Midi, "MIDI Timecode"),
+                    (Tab::Osc, "OSC"),
                     (Tab::Formats, "Formats"),
                 ],
             );
@@ -88,11 +94,53 @@ pub fn window(app: &mut CueLineApp, ctx: &egui::Context) {
             Tab::Audio => audio_tab(app, ui),
             Tab::Timecode => timecode_tab(app, ui),
             Tab::Midi => midi_tab(app, ui),
+            Tab::Osc => osc_tab(app, ui),
             Tab::Formats => formats_tab(app, ui),
         });
     });
     if !open {
         app.ui.prefs.open = false;
+    }
+}
+
+fn osc_tab(app: &mut CueLineApp, ui: &mut Ui) {
+    section(ui, "OSC over UDP");
+    group(ui, |ui| {
+        let draft = &mut app.ui.prefs.osc_draft;
+        row(ui, "Enable OSC", |ui| {
+            switch(ui, &mut draft.enabled);
+        });
+        row_separator(ui);
+        row(ui, "Listen address", |ui| {
+            ui.add(egui::TextEdit::singleline(&mut draft.listen).desired_width(200.0));
+        });
+        row_separator(ui);
+        row(ui, "Send feedback", |ui| {
+            switch(ui, &mut draft.feedback);
+        });
+        row_separator(ui);
+        row(ui, "Feedback destination", |ui| {
+            ui.add(egui::TextEdit::singleline(&mut draft.destination).desired_width(200.0));
+        });
+    });
+    footnote(ui, "Use IP:port (for example 127.0.0.1:9000). To receive from other computers, listen on 0.0.0.0 and allow UDP through your firewall. OSC has no authentication: use a trusted network.");
+    footnote(ui, "Commands: /cueline/play, /pause, /stop, /toggle, /seek, /cue and /cue/next. See the README for types, more commands and feedback.");
+    if let Some(err) = app.ui.prefs.osc_error.as_ref().or(app.osc.error.as_ref()) {
+        ui.label(RichText::new(err).font(fonts::text(11.5)).color(theme::RED));
+    } else {
+        footnote(ui, if app.osc.active() { "Listening" } else { "OSC is off" });
+    }
+    let changed = app.ui.prefs.osc_draft != app.settings.osc;
+    if sheet::primary_button(ui, "Apply", changed || app.osc.error.is_some()).clicked() {
+        let draft = app.ui.prefs.osc_draft.clone();
+        match app.osc.configure(&draft) {
+            Ok(()) => {
+                app.settings.osc = draft;
+                app.settings.save();
+                app.ui.prefs.osc_error = None;
+            }
+            Err(e) => app.ui.prefs.osc_error = Some(e),
+        }
     }
 }
 

@@ -7,6 +7,7 @@ mod engine;
 mod export;
 mod history;
 mod markers_io;
+mod osc;
 mod platform;
 mod project;
 mod settings;
