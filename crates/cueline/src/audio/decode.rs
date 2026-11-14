@@ -66,7 +66,7 @@ fn decode_native(path: &Path) -> Result<DecodedAudio, String> {
     let mut scratch: Vec<Vec<f32>> = Vec::new();
     if let Some(n) = track.num_frames {
         out.reserve(2);
-        out.push(Vec::with_capacity(n as usize));
+        out.push(Vec::with_capacity(n.min(1_000_000) as usize));
     }
 
     loop {
@@ -96,8 +96,14 @@ fn decode_native(path: &Path) -> Result<DecodedAudio, String> {
             out.resize_with(n_ch, || vec![0.0; len]);
         }
         let frames = buf.frames();
-        for (dst, src) in out.iter_mut().zip(scratch.iter()) {
-            dst.extend_from_slice(&src[..frames.min(src.len())]);
+        for (channel, dst) in out.iter_mut().enumerate() {
+            let before = dst.len();
+            if let Some(src) = scratch.get(channel) {
+                dst.extend_from_slice(&src[..frames.min(src.len())]);
+            }
+            // A stream can change its channel layout between packets. Keep
+            // every plane aligned so the mixer can safely index either one.
+            dst.resize(before + frames, 0.0);
         }
     }
 
